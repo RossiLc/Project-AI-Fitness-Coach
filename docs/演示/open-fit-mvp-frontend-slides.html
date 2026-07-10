@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Open Fit MVP - Frontend Slides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    /* === VIEWPORT BASE: fixed 1920x1080 stage scaled as a whole === */
+    :root {
+      --stage-w: 1920;
+      --stage-h: 1080;
+      --ink: #13251c;
+      --muted: #657268;
+      --paper: #f4efe2;
+      --cream: #fff9ea;
+      --green: #2f7d57;
+      --teal: #188579;
+      --coral: #d96d4a;
+      --gold: #c79838;
+      --blue: #315d89;
+      --line: rgba(19, 37, 28, .18);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background:
+        radial-gradient(circle at 82% 12%, rgba(217, 109, 74, .18), transparent 26%),
+        linear-gradient(135deg, #efe7d5 0%, #f8f3e8 48%, #e8f0e5 100%);
+      color: var(--ink);
+      font-family: "Noto Sans SC", sans-serif;
+    }
+
+    .viewport {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .stage {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: center center;
+      overflow: hidden;
+      border-radius: 0;
+      background: var(--paper);
+      box-shadow: 0 30px 100px rgba(19, 37, 28, .18);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      padding: 86px 108px;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .42s ease, transform .42s ease;
+      transform: translateX(38px);
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(19,37,28,.035) 1px, transparent 1px),
+        linear-gradient(rgba(19,37,28,.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 46px 46px;
+    }
+
+    .slide.active {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide, .reveal { transition: none !important; animation: none !important; }
+    }
+
+    /* === TYPOGRAPHY AND SHARED SLIDE LANGUAGE === */
+    h1, h2, h3, p { margin: 0; }
+    h1, h2 {
+      font-family: "ZCOOL XiaoWei", serif;
+      font-weight: 400;
+      letter-spacing: 0;
+      line-height: .98;
+    }
+    h1 { font-size: 112px; max-width: 1180px; }
+    h2 { font-size: 74px; max-width: 1200px; }
+    h3 { font-size: 30px; line-height: 1.25; }
+    p, li { font-size: 24px; line-height: 1.55; color: var(--muted); }
+    small { color: var(--muted); font-size: 19px; }
+    code { font-family: "Consolas", monospace; color: var(--green); }
+
+    .kicker {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 28px;
+      color: var(--green);
+      font-size: 20px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+    .kicker::before { content: ""; width: 58px; height: 4px; background: currentColor; }
+
+    .subtitle { margin-top: 36px; max-width: 820px; font-size: 32px; }
+    .deck-mark {
+      position: absolute;
+      right: 92px;
+      top: 74px;
+      display: grid;
+      place-items: center;
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      color: #fff9ea;
+      background: conic-gradient(from 220deg, var(--green), var(--teal), var(--gold), var(--coral), var(--green));
+      font-weight: 900;
+      font-size: 28px;
+    }
+
+    .footer {
+      position: absolute;
+      left: 108px;
+      right: 108px;
+      bottom: 52px;
+      display: flex;
+      justify-content: space-between;
+      color: rgba(19, 37, 28, .55);
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .grid { display: grid; gap: 26px; }
+    .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      padding: 30px;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 249, 234, .72);
+      box-shadow: 12px 12px 0 rgba(19, 37, 28, .06);
+    }
+    .card strong {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 28px;
+      color: var(--ink);
+    }
+    .card p, .card li { font-size: 22px; }
+
+    .tag-row { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 44px; }
+    .tag {
+      min-height: 48px;
+      padding: 10px 20px;
+      border: 2px solid rgba(19, 37, 28, .16);
+      border-radius: 999px;
+      background: #fff9ea;
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    /* === SLIDE-SPECIFIC VISUALS === */
+    .hero-visual {
+      position: absolute;
+      right: 108px;
+      bottom: 122px;
+      width: 610px;
+      height: 570px;
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(47,125,87,.16), rgba(24,133,121,.08));
+      overflow: hidden;
+    }
+    .phone {
+      position: absolute;
+      left: 48px;
+      top: 70px;
+      width: 210px;
+      height: 390px;
+      border: 12px solid #18281f;
+      border-radius: 36px;
+      background: #fff9ea;
+      padding: 30px 20px;
+      box-shadow: 24px 24px 0 rgba(19,37,28,.08);
+    }
+    .phone div {
+      height: 16px;
+      border-radius: 999px;
+      background: #dbe9dd;
+      margin-bottom: 18px;
+    }
+    .phone div:nth-child(1), .phone div:nth-child(6) { width: 88%; background: var(--green); }
+    .phone div:nth-child(3) { width: 78%; background: #f0cbbd; }
+    .phone div:nth-child(4) { width: 55%; }
+
+    .metric {
+      position: absolute;
+      right: 40px;
+      width: 270px;
+      padding: 24px;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 249, 234, .92);
+    }
+    .metric.one { top: 72px; }
+    .metric.two { bottom: 76px; }
+    .bar { height: 16px; margin-top: 16px; border-radius: 999px; background: linear-gradient(90deg, var(--green) var(--w), #dfd4be var(--w)); }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 18px;
+      margin-top: 70px;
+    }
+    .node {
+      position: relative;
+      min-height: 178px;
+      padding: 26px 20px;
+      border: 3px solid rgba(19,37,28,.18);
+      border-radius: 20px;
+      background: #fff9ea;
+    }
+    .node:not(:last-child)::after {
+      content: ">";
+      position: absolute;
+      right: -24px;
+      top: 76px;
+      color: var(--green);
+      font-size: 36px;
+      font-weight: 900;
+    }
+
+    .map {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      margin-top: 48px;
+    }
+    .lane {
+      min-height: 600px;
+      padding: 30px;
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255,249,234,.7);
+    }
+    .lane-title { margin-bottom: 22px; color: var(--green); font-size: 28px; font-weight: 900; }
+    .mini {
+      padding: 18px;
+      margin-bottom: 16px;
+      border-left: 8px solid var(--green);
+      border-radius: 12px;
+      background: rgba(255,255,255,.58);
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .lane:nth-child(2) .mini { border-color: var(--teal); }
+    .lane:nth-child(3) .mini { border-color: var(--coral); }
+
+    .wireframe {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      margin-top: 46px;
+      padding: 24px;
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      background: #fff9ea;
+    }
+    .sidebar { padding: 22px; border-radius: 18px; background: #18281f; }
+    .side-item { margin-bottom: 12px; padding: 14px 18px; border-radius: 10px; color: #fff9ea; background: rgba(255,249,234,.1); font-size: 20px; }
+    .side-item.active { background: var(--gold); color: var(--ink); font-weight: 900; }
+    .placeholder {
+      min-height: 122px;
+      padding: 22px;
+      border: 2px dashed rgba(19,37,28,.25);
+      border-radius: 16px;
+      background: rgba(255,255,255,.5);
+    }
+
+    .timeline { margin-top: 44px; display: grid; gap: 18px; }
+    .milestone {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 26px;
+      padding: 24px;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,249,234,.74);
+    }
+    .phase { color: var(--green); font-size: 28px; font-weight: 900; }
+
+    .nav-ui {
+      position: fixed;
+      right: 22px;
+      bottom: 20px;
+      z-index: 30;
+      display: flex;
+      gap: 10px;
+    }
+    .nav-ui button {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 50%;
+      background: #17271f;
+      color: #fff9ea;
+      font-size: 22px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <div class="stage" id="stage">
+      <section class="slide active">
+        <div class="deck-mark">OF</div>
+        <div class="kicker">Frontend Slides Edition</div>
+        <h1>Open Fit MVP 方案讲解</h1>
+        <p class="subtitle">面向初学者同事的项目说明：我们要做什么，系统怎么流转，前后端怎么分工，以及计划如何落地。</p>
+        <div class="tag-row">
+          <span class="tag">Vue 3</span><span class="tag">Node.js</span><span class="tag">企业微信</span><span class="tag">AI 安全</span><span class="tag">本地存储</span>
+        </div>
+        <div class="hero-visual">
+          <div class="phone"><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+          <div class="metric one"><h3>今日打卡</h3><div class="bar" style="--w:72%"></div><small>确认后才计入排行榜</small></div>
+          <div class="metric two"><h3>企业微信</h3><div class="bar" style="--w:58%"></div><small>公开通知与个人提醒分开</small></div>
+        </div>
+        <div class="footer"><span>Open Fit</span><span>01 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">为什么要做</div>
+        <h2>把健身活动从“群里喊一喊”变成可记录、可统计、可提醒。</h2>
+        <div class="grid cols-3" style="margin-top: 70px;">
+          <div class="card"><strong>员工</strong><p>用文本快速打卡，AI 帮忙解析，但自己确认后才算数。</p></div>
+          <div class="card"><strong>管理员</strong><p>看完成率、处理异常打卡、配置活动规则和提醒任务。</p></div>
+          <div class="card"><strong>企业微信</strong><p>群机器人做公开通知，自建应用做个人提醒和身份映射。</p></div>
+        </div>
+        <div class="footer"><span>Problem Framing</span><span>02 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">核心闭环</div>
+        <h2>AI 是助手，不是裁判。用户确认才进入正式统计。</h2>
+        <div class="pipeline">
+          <div class="node"><h3>员工输入</h3><small>文本描述运动</small></div>
+          <div class="node"><h3>AI 解析</h3><small>提取运动信息</small></div>
+          <div class="node"><h3>用户确认</h3><small>确认或修正</small></div>
+          <div class="node"><h3>保存记录</h3><small>生成有效打卡</small></div>
+          <div class="node"><h3>生成榜单</h3><small>按规则排名</small></div>
+          <div class="node"><h3>提醒推送</h3><small>个人提醒与周榜</small></div>
+        </div>
+        <div class="footer"><span>Main Flow</span><span>03 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">系统架构</div>
+        <h2>三层理解：入口、Node.js 后端、数据与任务。</h2>
+        <div class="map">
+          <div class="lane"><div class="lane-title">用户入口</div><div class="mini">Vue 3 工作台</div><div class="mini">企业微信群机器人</div><div class="mini">企业微信自建应用</div><div class="mini">OAuth 登录</div></div>
+          <div class="lane"><div class="lane-title">Node.js 后端</div><div class="mini">auth</div><div class="mini">checkins</div><div class="mini">leaderboards</div><div class="mini">reminders</div><div class="mini">wecom / ai / audit</div></div>
+          <div class="lane"><div class="lane-title">数据与任务</div><div class="mini">PostgreSQL</div><div class="mini">Redis + BullMQ</div><div class="mini">本地文件存储</div><div class="mini">worker 定时任务</div></div>
+        </div>
+        <div class="footer"><span>Architecture</span><span>04 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">工作台草图</div>
+        <h2>Web 工作台覆盖员工、活动管理员、企业管理员三类角色。</h2>
+        <div class="wireframe">
+          <div class="sidebar">
+            <div class="side-item active">今日打卡</div><div class="side-item">我的记录</div><div class="side-item">排行榜</div><div class="side-item">运营看板</div><div class="side-item">提醒任务</div><div class="side-item">企业微信配置</div>
+          </div>
+          <div class="grid cols-2">
+            <div class="placeholder"><h3>文本输入</h3><p>员工描述今天运动内容。</p></div>
+            <div class="placeholder"><h3>识别结果</h3><p>运动类型、时长、距离、估算热量。</p></div>
+            <div class="placeholder"><h3>确认操作</h3><p>确认提交、修改、取消。</p></div>
+            <div class="placeholder"><h3>管理状态</h3><p>提醒任务、打卡审核、活动配置。</p></div>
+          </div>
+        </div>
+        <div class="footer"><span>Workbench Sketch</span><span>05 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">企业微信</div>
+        <h2>群机器人负责公开信息，自建应用负责个人触达。</h2>
+        <div class="grid cols-2" style="margin-top: 70px;">
+          <div class="card"><strong>群机器人</strong><p>每日小贴士、每周排行榜、群内 @ 咨询。不公开点名未打卡成员。</p></div>
+          <div class="card"><strong>自建应用</strong><p>OAuth 登录、userid 映射、个人未打卡提醒。权限不可用时降级到 Web 看板。</p></div>
+        </div>
+        <div class="footer"><span>WeCom Integration</span><span>06 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">数据表怎么记</div>
+        <h2>先记住五组：人、活动、打卡、榜单、提醒。</h2>
+        <div class="grid cols-3" style="margin-top: 58px;">
+          <div class="card"><strong>members</strong><p>谁参加活动，企业微信 userid 是谁。</p></div>
+          <div class="card"><strong>activities</strong><p>活动时间、规则、提醒配置。</p></div>
+          <div class="card"><strong>checkins</strong><p>每天交了什么，状态是什么。</p></div>
+          <div class="card"><strong>leaderboards</strong><p>按规则算出的排名快照。</p></div>
+          <div class="card"><strong>reminder_tasks</strong><p>谁还没打卡，提醒发到哪一步。</p></div>
+          <div class="card"><strong>audit_logs</strong><p>管理员修正、作废、配置变更都留痕。</p></div>
+        </div>
+        <div class="footer"><span>Data Model</span><span>07 / 08</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="kicker">实施计划</div>
+        <h2>先跑通闭环，再接企业微信，最后增强体验。</h2>
+        <div class="timeline">
+          <div class="milestone"><div class="phase">阶段 1</div><p><strong>基础工程：</strong>Vue、Node.js/NestJS、PostgreSQL、Redis、本地文件目录。</p></div>
+          <div class="milestone"><div class="phase">阶段 2</div><p><strong>打卡闭环：</strong>成员、活动、文本打卡、AI 解析、用户确认。</p></div>
+          <div class="milestone"><div class="phase">阶段 3</div><p><strong>榜单提醒：</strong>排行榜快照、未打卡提醒、失败重试。</p></div>
+          <div class="milestone"><div class="phase">阶段 4</div><p><strong>企业微信：</strong>群通知、自建应用、OAuth、userid、个人提醒。</p></div>
+        </div>
+        <div class="footer"><span>Implementation Plan</span><span>08 / 08</span></div>
+      </section>
+    </div>
+  </main>
+
+  <div class="nav-ui">
+    <button onclick="prev()" aria-label="上一页">‹</button>
+    <button onclick="next()" aria-label="下一页">›</button>
+  </div>
+
+  <script>
+    /* === STAGE SCALING === */
+    const stage = document.getElementById('stage');
+    const slides = [...document.querySelectorAll('.slide')];
+    let current = 0;
+
+    function fitStage() {
+      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      stage.style.transform = `scale(${scale})`;
+    }
+
+    function goTo(index) {
+      current = (index + slides.length) % slides.length;
+      slides.forEach((slide, i) => slide.classList.toggle('active', i === current));
+    }
+
+    function next() { goTo(current + 1); }
+    function prev() { goTo(current - 1); }
+
+    window.addEventListener('resize', fitStage);
+    window.addEventListener('keydown', (event) => {
+      if (['ArrowRight', ' ', 'PageDown'].includes(event.key)) next();
+      if (['ArrowLeft', 'PageUp'].includes(event.key)) prev();
+    });
+    fitStage();
+  </script>
+</body>
+</html>

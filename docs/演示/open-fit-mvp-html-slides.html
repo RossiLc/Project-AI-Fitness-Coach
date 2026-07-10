@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="generator" content="html-slides v0.9.4" />
+  <title>Open Fit MVP - HTML Slides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    /* === THEME: Excalidraw-inspired teaching deck === */
+    :root {
+      --bg: #fbf7ed;
+      --ink: #1f2f26;
+      --muted: #6f766f;
+      --green: #2d7d58;
+      --teal: #138379;
+      --orange: #d6764f;
+      --yellow: #edc45f;
+      --blue: #3b6794;
+      --line: rgba(31,47,38,.22);
+      --panel: rgba(255,255,255,.56);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Noto Sans SC", sans-serif; overflow: hidden; }
+    .deck { width: 100vw; height: 100vh; height: 100dvh; overflow: hidden; position: relative; }
+    .slide {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      padding: clamp(28px, 5vw, 72px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(2vh);
+      transition: opacity .28s ease, transform .28s ease;
+      background:
+        linear-gradient(90deg, rgba(31,47,38,.035) 1px, transparent 1px),
+        linear-gradient(rgba(31,47,38,.035) 1px, transparent 1px),
+        var(--bg);
+      background-size: clamp(24px, 3vw, 42px) clamp(24px, 3vw, 42px);
+    }
+    .slide.active { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide, .fade-in { transition: none !important; animation: none !important; }
+    }
+
+    /* === TYPOGRAPHY === */
+    h1, h2, h3, p { margin: 0; }
+    h1, h2 { font-family: "Ma Shan Zheng", cursive; line-height: 1.02; font-weight: 400; letter-spacing: 0; }
+    h1 { font-size: clamp(52px, 9vw, 116px); max-width: min(1100px, 78vw); }
+    h2 { font-size: clamp(38px, 6vw, 76px); max-width: min(1100px, 86vw); }
+    h3 { font-size: clamp(19px, 2.1vw, 30px); line-height: 1.25; }
+    p, li { color: var(--muted); font-size: clamp(15px, 1.65vw, 24px); line-height: 1.52; }
+    small { color: var(--muted); font-size: clamp(12px, 1.1vw, 16px); }
+    code { color: var(--green); font-family: Consolas, monospace; }
+
+    /* === LAYOUT COMPONENTS === */
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: clamp(8px, 1vw, 14px);
+      margin-bottom: clamp(14px, 2vw, 28px);
+      color: var(--green);
+      font-size: clamp(12px, 1.2vw, 18px);
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .kicker::before { content: ""; width: clamp(28px, 4vw, 54px); height: 3px; background: currentColor; }
+    .lead { margin-top: clamp(18px, 3vw, 34px); max-width: 760px; font-size: clamp(18px, 2.2vw, 30px); }
+    .grid { display: grid; gap: clamp(12px, 1.8vw, 24px); }
+    .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      min-height: 0;
+      padding: clamp(16px, 2vw, 28px);
+      border: 3px solid var(--line);
+      border-radius: clamp(14px, 1.8vw, 24px);
+      background: var(--panel);
+      box-shadow: clamp(5px, .8vw, 10px) clamp(5px, .8vw, 10px) 0 rgba(31,47,38,.08);
+    }
+    .card strong { display: block; margin-bottom: clamp(6px, 1vw, 12px); font-size: clamp(17px, 1.9vw, 28px); }
+    .chips { display: flex; flex-wrap: wrap; gap: clamp(8px, 1vw, 12px); margin-top: clamp(22px, 3vw, 40px); }
+    .chip { padding: clamp(7px, .8vw, 10px) clamp(11px, 1.2vw, 16px); border: 2px solid var(--line); border-radius: 999px; background: #fffdf5; font-weight: 900; font-size: clamp(13px, 1.2vw, 18px); }
+    .footer { position: absolute; left: clamp(28px, 5vw, 72px); right: clamp(28px, 5vw, 72px); bottom: clamp(16px, 2.4vw, 34px); display: flex; justify-content: space-between; color: rgba(31,47,38,.52); font-weight: 800; font-size: clamp(11px, 1vw, 15px); }
+
+    /* === PRO COMPONENTS === */
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: clamp(8px, 1.2vw, 16px); margin-top: clamp(28px, 5vw, 66px); }
+    .flow-step { position: relative; padding: clamp(14px, 2vw, 24px); border: 3px solid var(--line); border-radius: 20px; background: #fffdf5; min-height: clamp(110px, 18vh, 190px); }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; right: -1.2em; top: 42%; color: var(--orange); font-size: clamp(24px, 3vw, 42px); font-weight: 900; }
+    .arch { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: clamp(12px, 2vw, 24px); margin-top: clamp(24px, 4vw, 46px); }
+    .lane { border: 3px solid var(--line); border-radius: 24px; background: var(--panel); padding: clamp(16px, 2vw, 28px); min-height: clamp(300px, 52vh, 560px); }
+    .lane-title { color: var(--green); font-weight: 900; font-size: clamp(18px, 2vw, 30px); margin-bottom: clamp(10px, 1.5vw, 18px); }
+    .item { margin-bottom: clamp(8px, 1vw, 12px); padding: clamp(10px, 1.3vw, 16px); border-left: 7px solid var(--green); border-radius: 12px; background: rgba(255,255,255,.72); font-size: clamp(14px, 1.45vw, 21px); font-weight: 700; }
+    .lane:nth-child(2) .item { border-color: var(--teal); }
+    .lane:nth-child(3) .item { border-color: var(--orange); }
+    .table { width: 100%; border-collapse: collapse; margin-top: clamp(18px, 3vw, 34px); }
+    .table th, .table td { border: 2px solid var(--line); padding: clamp(8px, 1vw, 14px); text-align: left; vertical-align: top; font-size: clamp(13px, 1.3vw, 18px); }
+    .table th { background: var(--ink); color: #fffdf5; }
+    .table td { background: rgba(255,255,255,.58); color: var(--muted); }
+    .timeline { display: grid; gap: clamp(10px, 1.3vw, 16px); margin-top: clamp(18px, 3vw, 34px); }
+    .milestone { display: grid; grid-template-columns: minmax(84px, 12vw) 1fr; gap: clamp(12px, 2vw, 24px); padding: clamp(12px, 1.6vw, 20px); border: 3px solid var(--line); border-radius: 18px; background: var(--panel); }
+    .phase { color: var(--green); font-weight: 900; font-size: clamp(16px, 1.7vw, 26px); }
+    .controls { position: fixed; right: clamp(12px, 2vw, 24px); bottom: clamp(12px, 2vw, 24px); z-index: 20; display: flex; gap: 8px; }
+    .controls button { width: clamp(34px, 4vw, 46px); height: clamp(34px, 4vw, 46px); border: 0; border-radius: 50%; background: var(--ink); color: #fffdf5; font-size: clamp(18px, 2vw, 28px); cursor: pointer; }
+
+    @media (max-height: 700px) {
+      .card p, .card li { font-size: clamp(12px, 1.2vw, 17px); }
+      .flow-step { min-height: 104px; }
+      .lane { min-height: 280px; }
+    }
+    @media (max-height: 600px), (max-width: 760px) {
+      .cols-2, .cols-3, .arch, .flow { grid-template-columns: 1fr; }
+      .flow-step:not(:last-child)::after { content: "↓"; right: 18px; top: auto; bottom: -30px; }
+      .slide { overflow: hidden; }
+    }
+    @media (max-height: 500px) {
+      h1 { font-size: clamp(36px, 7vw, 64px); }
+      h2 { font-size: clamp(28px, 5vw, 48px); }
+      .lead { font-size: clamp(14px, 1.6vw, 20px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+    <div class="slide active" data-slide="0">
+      <div class="kicker">HTML Slides Pro</div>
+      <h1>Open Fit MVP 方案</h1>
+      <p class="lead">一份给初学者也能讲明白的 HTML 演示稿：先理解闭环，再理解架构，最后看计划。</p>
+      <div class="chips"><span class="chip">Vue 3</span><span class="chip">Node.js/NestJS</span><span class="chip">PostgreSQL</span><span class="chip">企业微信</span><span class="chip">AI 安全</span></div>
+      <div class="footer"><span>Open Fit</span><span>1 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"开场","script":"今天我们用一条主线讲 Open Fit：它不是单纯做一个打卡页面，而是把企业健身活动变成可记录、可统计、可提醒的平台。","notes":["目标是让初学者先抓住系统主线","技术栈已经确定为 Vue 和 Node.js","重点讲流程、架构和计划"]}</script>
+    </div>
+
+    <div class="slide" data-slide="1">
+      <div class="kicker">问题定义</div>
+      <h2>它解决三个角色的问题。</h2>
+      <div class="grid cols-3" style="margin-top: clamp(24px, 5vw, 58px);">
+        <div class="card"><strong>员工</strong><p>打卡要简单，AI 解析后自己确认，减少填写成本。</p></div>
+        <div class="card"><strong>管理员</strong><p>活动要可运营，能看数据、改规则、处理异常。</p></div>
+        <div class="card"><strong>企业</strong><p>通知要进企业微信，但个人提醒不能公开暴露。</p></div>
+      </div>
+      <div class="footer"><span>Problem</span><span>2 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"问题定义","script":"这个项目的核心不是 AI 多酷，而是三个角色的工作要顺。员工能低成本参与，管理员能运营，企业微信能正确触达。","notes":["员工需要低成本打卡","管理员需要运营工具","企业微信要区分公开和个人场景"]}</script>
+    </div>
+
+    <div class="slide" data-slide="2">
+      <div class="kicker">主流程</div>
+      <h2>AI 解析只是中间步骤，确认才是正式提交。</h2>
+      <div class="flow">
+        <div class="flow-step"><h3>输入</h3><p>员工写运动内容</p></div>
+        <div class="flow-step"><h3>解析</h3><p>AI 提取结构化结果</p></div>
+        <div class="flow-step"><h3>确认</h3><p>员工修改或确认</p></div>
+        <div class="flow-step"><h3>统计</h3><p>进入排行榜计算</p></div>
+        <div class="flow-step"><h3>提醒</h3><p>任务推送或降级</p></div>
+      </div>
+      <div class="footer"><span>Flow</span><span>3 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"主流程","script":"这条流程是整个系统的主干。注意，AI 的解析结果不是事实，它只是建议。员工确认之后，记录才进入统计和排行榜。","notes":["AI 不是最终裁判","确认动作保护公平性","统计和提醒依赖有效记录"]}</script>
+    </div>
+
+    <div class="slide" data-slide="3">
+      <div class="kicker">架构草图</div>
+      <h2>三层结构：入口、服务、数据任务。</h2>
+      <div class="arch">
+        <div class="lane"><div class="lane-title">入口</div><div class="item">Vue 3 Web 工作台</div><div class="item">企业微信群机器人</div><div class="item">企业微信自建应用</div></div>
+        <div class="lane"><div class="lane-title">Node.js 服务</div><div class="item">auth / members</div><div class="item">checkins / leaderboards</div><div class="item">reminders / wecom / ai</div><div class="item">admin / audit</div></div>
+        <div class="lane"><div class="lane-title">数据任务</div><div class="item">PostgreSQL</div><div class="item">Redis + BullMQ</div><div class="item">本地文件存储</div><div class="item">worker 定时任务</div></div>
+      </div>
+      <div class="footer"><span>Architecture</span><span>4 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"架构草图","script":"我们先不做微服务。MVP 用模块化单体就够了，入口在前面，Node.js 后端负责业务，PostgreSQL 和 Redis 支撑数据和任务。","notes":["Vue 负责工作台","Node.js/NestJS 负责模块化业务","PostgreSQL、Redis、本地文件存储支撑数据"]}</script>
+    </div>
+
+    <div class="slide" data-slide="4">
+      <div class="kicker">工作台页面</div>
+      <h2>页面按角色划分，比按功能堆叠更容易理解。</h2>
+      <table class="table">
+        <thead><tr><th>角色</th><th>页面</th><th>目的</th></tr></thead>
+        <tbody>
+          <tr><td>员工</td><td>今日打卡、我的记录、排行榜、AI 教练</td><td>完成参与和查看个人结果</td></tr>
+          <tr><td>活动管理员</td><td>运营看板、打卡管理、提醒任务、活动配置</td><td>运营活动和处理异常</td></tr>
+          <tr><td>企业管理员</td><td>企业微信配置、成员映射、角色权限</td><td>打通企业微信和内部身份</td></tr>
+        </tbody>
+      </table>
+      <div class="footer"><span>Workbench</span><span>5 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"工作台页面","script":"初学者容易把后台理解成一堆页面。更好的理解方式是按角色看：员工完成自己的事，活动管理员运营活动，企业管理员负责接入和权限。","notes":["员工端负责参与","活动管理员端负责运营","企业管理员端负责接入和权限"]}</script>
+    </div>
+
+    <div class="slide" data-slide="5">
+      <div class="kicker">企业微信</div>
+      <h2>公开消息和个人消息必须分开。</h2>
+      <div class="grid cols-2" style="margin-top: clamp(24px, 5vw, 58px);">
+        <div class="card"><strong>群机器人</strong><p>每日小贴士、每周排行榜、群内 @ 咨询。适合大家都能看的内容。</p></div>
+        <div class="card"><strong>自建应用</strong><p>OAuth 登录、userid 映射、个人未打卡提醒。适合只给某个人看的内容。</p></div>
+      </div>
+      <div class="footer"><span>WeCom</span><span>6 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"企业微信","script":"这里最容易踩坑：群机器人不是万能通知工具。未打卡这种个人状态，默认不应该公开发到群里。","notes":["群机器人负责公开内容","自建应用负责个人提醒","权限不可用时降级到 Web 看板"]}</script>
+    </div>
+
+    <div class="slide" data-slide="6">
+      <div class="kicker">数据模型</div>
+      <h2>先记住核心表，不必一开始背所有字段。</h2>
+      <table class="table">
+        <thead><tr><th>表</th><th>一句话理解</th><th>关键点</th></tr></thead>
+        <tbody>
+          <tr><td><code>members</code></td><td>谁参加活动</td><td>企业微信 userid、角色</td></tr>
+          <tr><td><code>activities</code></td><td>活动怎么玩</td><td>周期、规则、提醒时间</td></tr>
+          <tr><td><code>checkins</code></td><td>每天交了什么</td><td>状态、时长、估算热量</td></tr>
+          <tr><td><code>leaderboard_entries</code></td><td>榜单怎么排</td><td>排名、分数、打卡天数</td></tr>
+          <tr><td><code>reminder_tasks</code></td><td>谁要提醒</td><td>发送状态、失败原因</td></tr>
+        </tbody>
+      </table>
+      <div class="footer"><span>Data Model</span><span>7 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"数据模型","script":"数据表不用一开始记字段。先记住五组对象：人、活动、打卡、榜单、提醒。后面所有流程基本都围绕这五组展开。","notes":["members 表示人","activities 表示活动规则","checkins 是统计的基础","reminder_tasks 表示提醒执行情况"]}</script>
+    </div>
+
+    <div class="slide" data-slide="7">
+      <div class="kicker">实施计划</div>
+      <h2>从基础到闭环，再到企业微信和 AI 安全。</h2>
+      <div class="timeline">
+        <div class="milestone"><div class="phase">1</div><p><strong>基础工程</strong>：Vue、Node.js/NestJS、PostgreSQL、Redis、本地文件目录。</p></div>
+        <div class="milestone"><div class="phase">2</div><p><strong>打卡闭环</strong>：成员、活动、文本打卡、AI 解析、用户确认。</p></div>
+        <div class="milestone"><div class="phase">3</div><p><strong>榜单提醒</strong>：排行榜快照、未打卡提醒、失败重试。</p></div>
+        <div class="milestone"><div class="phase">4</div><p><strong>企业微信与 AI 安全</strong>：群通知、自建应用、OAuth、拒答模板。</p></div>
+      </div>
+      <div class="footer"><span>Plan</span><span>8 / 8</span></div>
+      <script type="application/json" class="slide-notes">{"title":"实施计划","script":"实施顺序不要反过来。先有基础工程，再有打卡闭环，然后做榜单提醒，最后接企业微信和 AI 安全。这样每一步都能验证。","notes":["先搭工程基础","再跑通打卡闭环","然后做统计提醒","最后完善企业微信和 AI 安全"]}</script>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button onclick="prev()" aria-label="上一页">‹</button>
+    <button onclick="next()" aria-label="下一页">›</button>
+  </div>
+
+  <script>
+    /* === SLIDES RUNTIME === */
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    let current = 0;
+
+    function showNotes(slide) {
+      const notes = slide.querySelector('.slide-notes');
+      if (!notes) return;
+      try {
+        const data = JSON.parse(notes.textContent);
+        console.clear();
+        console.log(`%c${data.title}`, 'font-size:18px;font-weight:bold;color:#2d7d58');
+        console.log(data.script);
+        console.table(data.notes);
+      } catch (error) {
+        console.warn('Slide notes parse failed', error);
+      }
+    }
+
+    function goTo(index) {
+      current = (index + slides.length) % slides.length;
+      slides.forEach((slide, idx) => slide.classList.toggle('active', idx === current));
+      showNotes(slides[current]);
+    }
+
+    function next() { goTo(current + 1); }
+    function prev() { goTo(current - 1); }
+
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'PageDown') next();
+      if (event.key === 'ArrowLeft' || event.key === 'PageUp') prev();
+    });
+
+    showNotes(slides[0]);
+  </script>
+</body>
+</html>

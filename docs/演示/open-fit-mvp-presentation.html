@@ -1,0 +1,1402 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Open Fit MVP 方案讲解</title>
+  <style>
+    :root {
+      --ink: #16211b;
+      --muted: #5c6d63;
+      --paper: #f5f2e8;
+      --panel: #fffaf0;
+      --line: #d7cdb7;
+      --green: #2f7d57;
+      --teal: #16817a;
+      --blue: #355f8f;
+      --coral: #d16c4c;
+      --gold: #b8872f;
+      --shadow: 0 22px 60px rgba(31, 42, 35, 0.16);
+      --radius: 8px;
+      --slide-w: min(1180px, calc(100vw - 48px));
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background:
+        linear-gradient(90deg, rgba(22, 33, 27, 0.035) 1px, transparent 1px),
+        linear-gradient(rgba(22, 33, 27, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 36px 36px;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      line-height: 1.55;
+    }
+
+    .deck-shell {
+      min-height: 100vh;
+      padding: 20px 0 48px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: var(--slide-w);
+      margin: 0 auto 20px;
+      padding: 12px 14px;
+      border: 1px solid rgba(22, 33, 27, 0.12);
+      border-radius: var(--radius);
+      background: rgba(245, 242, 232, 0.88);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 32px rgba(31, 42, 35, 0.08);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      color: #fff;
+      background: conic-gradient(from 200deg, var(--green), var(--teal), var(--gold), var(--green));
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .brand span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav a, .control {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 7px 10px;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: 999px;
+      color: var(--ink);
+      background: rgba(255, 250, 240, 0.72);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .nav a:hover, .control:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .slides {
+      display: grid;
+      gap: 28px;
+    }
+
+    .slide {
+      width: var(--slide-w);
+      min-height: min(720px, calc(100vh - 120px));
+      margin: 0 auto;
+      padding: clamp(28px, 5vw, 58px);
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: var(--radius);
+      background:
+        radial-gradient(circle at 96% 12%, rgba(209, 108, 76, 0.14), transparent 24%),
+        linear-gradient(135deg, rgba(255, 250, 240, 0.96), rgba(246, 239, 224, 0.96));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .slide.compact { min-height: auto; }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .kicker::before {
+      content: "";
+      width: 34px;
+      height: 2px;
+      background: currentColor;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 920px;
+      margin-bottom: 20px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(42px, 8vw, 86px);
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      max-width: 920px;
+      margin-bottom: 18px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(30px, 5vw, 56px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .lead {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: clamp(18px, 2.2vw, 24px);
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      padding: 18px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.42);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+      font-size: 16px;
+    }
+
+    .card p, .card li {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: 999px;
+      background: rgba(255, 250, 240, 0.78);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .hero-layout {
+      display: grid;
+      grid-template-columns: 1.18fr 0.82fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .hero-visual {
+      min-height: 430px;
+      position: relative;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(47, 125, 87, 0.16), rgba(22, 129, 122, 0.08)),
+        rgba(255, 250, 240, 0.72);
+      overflow: hidden;
+    }
+
+    .phone {
+      position: absolute;
+      left: 28px;
+      top: 48px;
+      width: 178px;
+      height: 330px;
+      border: 8px solid #1d2b22;
+      border-radius: 28px;
+      background: #fffaf0;
+      box-shadow: 18px 18px 0 rgba(22, 33, 27, 0.08);
+      padding: 18px 12px;
+    }
+
+    .phone-line {
+      height: 10px;
+      margin-bottom: 10px;
+      border-radius: 999px;
+      background: #d8eadf;
+    }
+
+    .phone-line.short { width: 58%; }
+    .phone-line.mid { width: 78%; background: #f2d7c9; }
+    .phone-line.dark { width: 90%; background: #2f7d57; }
+
+    .dashboard-card {
+      position: absolute;
+      right: 24px;
+      width: 235px;
+      padding: 18px;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: var(--radius);
+      background: rgba(255, 250, 240, 0.94);
+      box-shadow: 0 18px 40px rgba(31, 42, 35, 0.12);
+    }
+
+    .dashboard-card.one { top: 42px; }
+    .dashboard-card.two { bottom: 38px; }
+
+    .bar {
+      height: 12px;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--green) var(--w), #e7ddc8 var(--w));
+    }
+
+    .diagram {
+      display: grid;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .node {
+      position: relative;
+      min-height: 94px;
+      padding: 14px;
+      border: 2px solid rgba(22, 33, 27, 0.18);
+      border-radius: var(--radius);
+      background: rgba(255, 250, 240, 0.82);
+    }
+
+    .node:not(:last-child)::after {
+      content: ">";
+      position: absolute;
+      right: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--green);
+      font-weight: 900;
+      z-index: 2;
+    }
+
+    .node small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .system-map {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .lane {
+      min-height: 440px;
+      padding: 18px;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: var(--radius);
+      background: rgba(255, 250, 240, 0.72);
+    }
+
+    .lane-title {
+      margin-bottom: 14px;
+      color: var(--green);
+      font-weight: 900;
+    }
+
+    .mini {
+      margin-bottom: 10px;
+      padding: 12px;
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.58);
+      border-left: 5px solid var(--green);
+      font-size: 13px;
+    }
+
+    .mini:nth-child(3n) { border-color: var(--teal); }
+    .mini:nth-child(4n) { border-color: var(--coral); }
+
+    .wireframe {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      min-height: 420px;
+      margin-top: 24px;
+      padding: 16px;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: var(--radius);
+      background: #fbf6e9;
+    }
+
+    .sidebar {
+      border-radius: var(--radius);
+      background: #213329;
+      padding: 16px;
+      color: #fffaf0;
+    }
+
+    .side-item {
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      background: rgba(255, 250, 240, 0.1);
+      font-size: 13px;
+    }
+
+    .side-item.active {
+      background: #f1c45d;
+      color: #1d2b22;
+      font-weight: 900;
+    }
+
+    .screen {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 14px;
+    }
+
+    .screen-top {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 12px;
+    }
+
+    .placeholder {
+      min-height: 80px;
+      padding: 14px;
+      border: 1px dashed rgba(22, 33, 27, 0.28);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.56);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-sketch {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      overflow: hidden;
+      border-radius: var(--radius);
+    }
+
+    .table-sketch th, .table-sketch td {
+      padding: 10px 12px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      text-align: left;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    .table-sketch th {
+      background: #213329;
+      color: #fffaf0;
+    }
+
+    .table-sketch td {
+      background: rgba(255, 255, 255, 0.5);
+      color: var(--muted);
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      margin-top: 24px;
+      padding-left: 20px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 5px;
+      top: 4px;
+      bottom: 4px;
+      width: 3px;
+      background: linear-gradient(var(--green), var(--coral));
+      border-radius: 999px;
+    }
+
+    .milestone {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 18px;
+      padding: 15px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 250, 240, 0.76);
+    }
+
+    .week {
+      color: var(--green);
+      font-weight: 900;
+    }
+
+    .callout {
+      margin-top: 22px;
+      padding: 18px;
+      border-left: 6px solid var(--coral);
+      border-radius: var(--radius);
+      background: rgba(209, 108, 76, 0.09);
+      color: var(--ink);
+    }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .dot.teal { background: var(--teal); }
+    .dot.coral { background: var(--coral); }
+    .dot.gold { background: var(--gold); }
+
+    ul.clean {
+      padding-left: 18px;
+      margin: 8px 0 0;
+    }
+
+    ul.clean li { margin: 6px 0; }
+
+    .story-grid {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 18px;
+      align-items: stretch;
+      margin-top: 24px;
+    }
+
+    .persona {
+      padding: 18px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 250, 240, 0.76);
+    }
+
+    .persona-name {
+      display: inline-flex;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: #fffaf0;
+      background: #213329;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .step-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(22, 33, 27, 0.12);
+    }
+
+    .num {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      color: #fffaf0;
+      background: var(--green);
+      font-weight: 900;
+    }
+
+    .split-board {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .yes-no {
+      min-height: 320px;
+      padding: 18px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .yes-no h3 {
+      display: inline-flex;
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: #fffaf0;
+      background: var(--green);
+    }
+
+    .yes-no.no h3 { background: var(--coral); }
+
+    .state-machine {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(108px, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .state {
+      min-height: 118px;
+      padding: 14px;
+      border-radius: var(--radius);
+      color: #fffaf0;
+      background: #213329;
+      position: relative;
+    }
+
+    .state:nth-child(2) { background: var(--blue); }
+    .state:nth-child(3) { background: var(--green); }
+    .state:nth-child(4) { background: var(--teal); }
+    .state:nth-child(5) { background: var(--gold); }
+    .state:nth-child(6) { background: var(--coral); }
+
+    .state:not(:last-child)::after {
+      content: ">";
+      position: absolute;
+      right: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink);
+      font-weight: 900;
+    }
+
+    .state small {
+      display: block;
+      margin-top: 8px;
+      color: rgba(255, 250, 240, 0.78);
+      font-size: 12px;
+    }
+
+    .api-map {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .api-row {
+      padding: 14px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.54);
+      font-size: 13px;
+    }
+
+    .api-row code {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--green);
+      font-weight: 900;
+      white-space: normal;
+    }
+
+    .db-map {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .db-card {
+      min-height: 132px;
+      padding: 14px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 250, 240, 0.78);
+      position: relative;
+    }
+
+    .db-card:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -16px;
+      top: 50%;
+      width: 14px;
+      height: 2px;
+      background: rgba(22, 33, 27, 0.38);
+    }
+
+    .mock-browser {
+      margin-top: 24px;
+      border: 1px solid rgba(22, 33, 27, 0.16);
+      border-radius: var(--radius);
+      background: #fbf6e9;
+      overflow: hidden;
+    }
+
+    .browser-bar {
+      display: flex;
+      gap: 6px;
+      padding: 10px 12px;
+      background: #213329;
+    }
+
+    .browser-bar span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--coral);
+    }
+
+    .browser-bar span:nth-child(2) { background: var(--gold); }
+    .browser-bar span:nth-child(3) { background: var(--green); }
+
+    .browser-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 16px;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      padding: 14px;
+      border-radius: var(--radius);
+      background: rgba(33, 51, 41, 0.92);
+      color: #fffaf0;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .question-list {
+      counter-reset: q;
+      display: grid;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .question {
+      counter-increment: q;
+      padding: 14px 14px 14px 54px;
+      border: 1px solid rgba(22, 33, 27, 0.14);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.52);
+      position: relative;
+    }
+
+    .question::before {
+      content: counter(q);
+      position: absolute;
+      left: 14px;
+      top: 14px;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      color: #fffaf0;
+      background: var(--green);
+      font-weight: 900;
+    }
+
+    .footer-note {
+      width: var(--slide-w);
+      margin: 20px auto 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .topbar { position: static; }
+      .hero-layout, .cols-2, .cols-3, .cols-4, .system-map, .wireframe, .screen-top {
+        grid-template-columns: 1fr;
+      }
+      .story-grid, .split-board, .api-map, .browser-body, .metric-strip, .db-map, .state-machine {
+        grid-template-columns: 1fr;
+      }
+      .pipeline {
+        grid-template-columns: 1fr;
+      }
+      .node:not(:last-child)::after {
+        content: "v";
+        right: 18px;
+        top: auto;
+        bottom: -17px;
+        transform: none;
+      }
+      .hero-visual { min-height: 520px; }
+      .phone { left: 18px; }
+      .dashboard-card { right: 18px; width: 210px; }
+      .milestone { grid-template-columns: 1fr; gap: 6px; }
+      .state:not(:last-child)::after {
+        content: "v";
+        right: 18px;
+        top: auto;
+        bottom: -18px;
+        color: var(--green);
+      }
+      .db-card:not(:last-child)::after { display: none; }
+    }
+
+    @media print {
+      html { background: #fff; }
+      .topbar { display: none; }
+      .slide {
+        width: 100%;
+        min-height: 100vh;
+        box-shadow: none;
+        break-after: page;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">OF</span>
+        <span>Open Fit MVP 方案讲解</span>
+      </div>
+      <nav class="nav" aria-label="演示导航">
+        <a href="#why">为什么</a>
+        <a href="#what">是什么</a>
+        <a href="#flow">流程</a>
+        <a href="#arch">架构</a>
+        <a href="#workbench">工作台</a>
+        <a href="#wecom">企微</a>
+        <a href="#plan">计划</a>
+      </nav>
+    </header>
+
+    <section class="slides">
+      <article class="slide" id="cover">
+        <div class="hero-layout">
+          <div>
+            <div class="kicker">MVP Solution Brief</div>
+            <h1>Open Fit 企业 AI 健身教练与打卡平台</h1>
+            <p class="lead">这份页面用于给初学者同事讲清楚：我们要做什么、系统怎么流转、前后端怎么分工、企业微信怎么接入，以及后续按什么顺序落地。</p>
+            <div class="pill-row">
+              <span class="pill">Vue 3 工作台</span>
+              <span class="pill">Node.js 后端</span>
+              <span class="pill">企业微信接入</span>
+              <span class="pill">AI 识别与安全边界</span>
+              <span class="pill">本地文件存储</span>
+            </div>
+          </div>
+          <div class="hero-visual" aria-label="Open Fit 产品示意图">
+            <div class="phone">
+              <div class="phone-line dark"></div>
+              <div class="phone-line"></div>
+              <div class="phone-line mid"></div>
+              <div class="phone-line short"></div>
+              <div class="phone-line"></div>
+              <div class="phone-line dark" style="margin-top: 26px;"></div>
+              <div class="phone-line mid"></div>
+              <div class="phone-line short"></div>
+            </div>
+            <div class="dashboard-card one">
+              <strong>今日打卡率</strong>
+              <div class="bar" style="--w: 72%;"></div>
+              <p style="margin: 10px 0 0; color: var(--muted); font-size: 13px;">员工确认后才计入统计</p>
+            </div>
+            <div class="dashboard-card two">
+              <strong>企业微信提醒</strong>
+              <div class="bar" style="--w: 52%;"></div>
+              <p style="margin: 10px 0 0; color: var(--muted); font-size: 13px;">群广播与个人提醒分开</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide compact" id="why">
+        <div class="kicker">01 Why</div>
+        <h2>一句话：让企业健身活动从“群里喊一喊”变成“可记录、可统计、可提醒”。</h2>
+        <div class="grid cols-3">
+          <div class="card">
+            <strong>员工需要简单入口</strong>
+            <p>每天用文本描述运动，系统解析后让员工确认，降低打卡成本。</p>
+          </div>
+          <div class="card">
+            <strong>管理员需要看得见</strong>
+            <p>看板、排行榜、提醒任务和异常打卡审核，让活动能运营。</p>
+          </div>
+          <div class="card">
+            <strong>企业微信需要分场景</strong>
+            <p>群机器人做公开通知，自建应用做个人提醒，避免公开点名。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" id="what">
+        <div class="kicker">02 What It Is</div>
+        <h2>它不是“一个聊天机器人”，而是一套企业健身活动的闭环系统。</h2>
+        <div class="split-board">
+          <div class="yes-no">
+            <h3>它要解决的事</h3>
+            <ul class="clean">
+              <li>员工可以用一句话完成运动打卡。</li>
+              <li>AI 帮忙把自然语言整理成可统计数据。</li>
+              <li>员工确认后，记录才进入榜单和统计。</li>
+              <li>管理员能看打卡率、异常、提醒和榜单。</li>
+              <li>企业微信负责把通知送到员工常用入口。</li>
+            </ul>
+          </div>
+          <div class="yes-no no">
+            <h3>它暂时不做的事</h3>
+            <ul class="clean">
+              <li>不做医疗诊断、疾病判断、药物建议。</li>
+              <li>不把 AI 识别直接当作最终打卡事实。</li>
+              <li>MVP 不强制做图片识别和可穿戴设备同步。</li>
+              <li>不在群里公开点名未打卡成员。</li>
+              <li>不先做复杂积分商城和奖励兑换。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">讲解口径：Open Fit 的主系统是 Web 工作台，企业微信是触达层，AI 是辅助层。</div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">03 MVP Scope</div>
+        <h2>MVP 先交付“能跑起来的活动”，不是一次性做完整运动 App。</h2>
+        <table class="table-sketch">
+          <thead>
+            <tr>
+              <th>模块</th>
+              <th>MVP 必做</th>
+              <th>后续增强</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>打卡</td>
+              <td>文本输入、识别、确认、修正、撤回、作废</td>
+              <td>图片识别、运动截图 OCR、批量导入</td>
+            </tr>
+            <tr>
+              <td>统计</td>
+              <td>有效打卡天数、累计运动时长、排行榜快照</td>
+              <td>团队赛、积分模型、奖励兑换</td>
+            </tr>
+            <tr>
+              <td>企业微信</td>
+              <td>群小贴士、周榜、OAuth 设计、个人提醒降级</td>
+              <td>多群绑定、复杂卡片、通讯录深度同步</td>
+            </tr>
+            <tr>
+              <td>AI</td>
+              <td>文本解析、健康咨询安全分类、拒答模板</td>
+              <td>多模态识别、个性化训练建议</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="slide">
+        <div class="kicker">04 Three Users</div>
+        <h2>用“三类用户的一天”讲，初学者更容易听懂系统为什么这样设计。</h2>
+        <div class="story-grid">
+          <div class="persona">
+            <span class="persona-name">员工 小李</span>
+            <p>下班后跑步，在 Web 工作台输入“慢跑 30 分钟，大概 5 公里”。系统识别结果后，小李确认提交，随后看到自己的本周排名。</p>
+          </div>
+          <div class="step-stack">
+            <div class="step"><span class="num">1</span><div><strong>打开今日打卡</strong><br />通过企业微信或内部链接进入 Web。</div></div>
+            <div class="step"><span class="num">2</span><div><strong>输入自然语言</strong><br />不用填复杂表单，先让 AI 整理。</div></div>
+            <div class="step"><span class="num">3</span><div><strong>确认识别结果</strong><br />员工自己确认，才算有效。</div></div>
+          </div>
+        </div>
+        <div class="story-grid">
+          <div class="persona">
+            <span class="persona-name">活动管理员 王姐</span>
+            <p>下午看运营看板，发现今天打卡率偏低。她进入提醒任务，重试失败消息，并在打卡管理里作废一条明显异常记录。</p>
+          </div>
+          <div class="step-stack">
+            <div class="step"><span class="num">1</span><div><strong>看打卡率</strong><br />先判断活动是否需要运营动作。</div></div>
+            <div class="step"><span class="num">2</span><div><strong>处理异常</strong><br />作废、重试、人工处理都有记录。</div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" id="flow">
+        <div class="kicker">02 Core Flow</div>
+        <h2>主流程先抓住一个闭环：打卡、确认、统计、提醒。</h2>
+        <p class="lead">初学者可以先记住这条线：用户输入不是最终事实，AI 只是助手，必须由用户确认后才进入排行榜。</p>
+        <div class="diagram">
+          <div class="pipeline">
+            <div class="node"><strong>员工输入</strong><small>文本描述运动内容</small></div>
+            <div class="node"><strong>AI 解析</strong><small>提取类型、时长、距离</small></div>
+            <div class="node"><strong>员工确认</strong><small>确认或修正识别结果</small></div>
+            <div class="node"><strong>保存打卡</strong><small>写入有效记录</small></div>
+            <div class="node"><strong>生成榜单</strong><small>按规则计算排名</small></div>
+            <div class="node"><strong>提醒与推送</strong><small>个人提醒和群榜单</small></div>
+          </div>
+        </div>
+        <div class="callout">讲解重点：AI 输出不能直接污染统计，确认步骤是公平性和信任感的保护线。</div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">06 Checkin Lifecycle</div>
+        <h2>一条打卡记录不是“有或没有”，它会经历多个状态。</h2>
+        <div class="state-machine">
+          <div class="state"><strong>draft</strong><small>员工正在填写，尚未识别。</small></div>
+          <div class="state"><strong>recognized</strong><small>系统已识别，等待确认。</small></div>
+          <div class="state"><strong>submitted</strong><small>员工确认，有效计入统计。</small></div>
+          <div class="state"><strong>corrected</strong><small>修正过，但仍可有效。</small></div>
+          <div class="state"><strong>withdrawn</strong><small>员工撤回，不计入统计。</small></div>
+          <div class="state"><strong>invalid</strong><small>管理员作废，必须写原因。</small></div>
+        </div>
+        <div class="callout">讲解重点：状态设计决定了公平性、可追溯性和排行榜可信度。</div>
+      </article>
+
+      <article class="slide" id="arch">
+        <div class="kicker">03 Architecture</div>
+        <h2>系统分三层看：入口、业务服务、数据与任务。</h2>
+        <div class="system-map">
+          <div class="lane">
+            <div class="lane-title">用户入口</div>
+            <div class="mini">Vue 3 Web 工作台</div>
+            <div class="mini">企业微信群机器人</div>
+            <div class="mini">企业微信自建应用</div>
+            <div class="mini">企业微信 OAuth 登录</div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">Node.js 后端</div>
+            <div class="mini">auth 身份与角色</div>
+            <div class="mini">checkins 打卡状态流</div>
+            <div class="mini">leaderboards 排行榜</div>
+            <div class="mini">reminders 提醒任务</div>
+            <div class="mini">wecom 企业微信接入</div>
+            <div class="mini">ai 解析与健康安全</div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">数据与任务</div>
+            <div class="mini">PostgreSQL 主数据</div>
+            <div class="mini">Redis + BullMQ 队列</div>
+            <div class="mini">本地文件存储</div>
+            <div class="mini">worker 定时任务</div>
+            <div class="mini">审计日志</div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><i class="dot"></i>公开入口</span>
+          <span><i class="dot teal"></i>后端模块</span>
+          <span><i class="dot coral"></i>任务与数据</span>
+        </div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">08 Tech Choices</div>
+        <h2>技术选型按 MVP 落地优先：简单、可维护、后续能扩展。</h2>
+        <div class="grid cols-3">
+          <div class="card"><strong>前端</strong><p>Vue 3 + Vite + TypeScript。适合企业内部工作台，开发快，结构清楚。</p></div>
+          <div class="card"><strong>后端</strong><p>Node.js + NestJS。模块化单体先跑起来，后续可按模块拆服务。</p></div>
+          <div class="card"><strong>数据</strong><p>PostgreSQL + Prisma。字段、枚举、索引和迁移都有清晰表达。</p></div>
+          <div class="card"><strong>任务</strong><p>Redis + BullMQ。处理小贴士、未打卡提醒、周榜推送和失败重试。</p></div>
+          <div class="card"><strong>文件</strong><p>本地磁盘存储。MVP 保存相对路径，通过后端鉴权访问。</p></div>
+          <div class="card"><strong>部署</strong><p>Docker Compose / 内网 VM。先降低运维复杂度。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" id="workbench">
+        <div class="kicker">04 Workbench Sketch</div>
+        <h2>Web 工作台不是一个页面，而是三类角色的工作区。</h2>
+        <div class="wireframe" aria-label="Web 工作台草图">
+          <div class="sidebar">
+            <div class="side-item active">今日打卡</div>
+            <div class="side-item">我的记录</div>
+            <div class="side-item">排行榜</div>
+            <div class="side-item">AI 教练</div>
+            <div class="side-item">运营看板</div>
+            <div class="side-item">提醒任务</div>
+            <div class="side-item">企业微信配置</div>
+          </div>
+          <div class="screen">
+            <div class="screen-top">
+              <div class="placeholder"><strong>文本打卡输入区</strong><br />员工输入“晚上慢跑 30 分钟，大概 5 公里”。</div>
+              <div class="placeholder"><strong>状态卡片</strong><br />今日未打卡、待确认、已提交。</div>
+            </div>
+            <div class="grid cols-2">
+              <div class="placeholder"><strong>AI 识别结果</strong><br />运动类型、时长、距离、强度、估算热量。</div>
+              <div class="placeholder"><strong>确认操作</strong><br />确认提交、修改结果、取消本次打卡。</div>
+              <div class="placeholder"><strong>排行榜摘要</strong><br />显示本周排名和规则说明。</div>
+              <div class="placeholder"><strong>提醒任务</strong><br />管理员查看未打卡、失败、人工处理。</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide">
+        <div class="kicker">10 Employee Page Detail</div>
+        <h2>今日打卡页要让员工明白：AI 只是帮我整理，我自己确认才提交。</h2>
+        <div class="mock-browser">
+          <div class="browser-bar"><span></span><span></span><span></span></div>
+          <div class="browser-body">
+            <div class="placeholder"><strong>输入区</strong><br />“晚上慢跑 30 分钟，大概 5 公里，有点累。”<br /><br />按钮：识别运动内容</div>
+            <div class="placeholder"><strong>今日状态</strong><br />未打卡 / 待确认 / 已提交 / 已撤回<br /><br />给员工一个清晰反馈。</div>
+            <div class="placeholder"><strong>AI 识别结果</strong><br />跑步、30 分钟、5 公里、中等强度、估算 260 千卡。</div>
+            <div class="placeholder"><strong>确认区</strong><br />确认提交 / 修改结果 / 放弃本次。确认前不进入榜单。</div>
+          </div>
+        </div>
+        <div class="callout">不合格设计：识别完直接保存为正式打卡，员工没有机会修正。</div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">11 Admin Dashboard</div>
+        <h2>运营看板只回答一个问题：今天活动有没有跑起来？</h2>
+        <div class="metric-strip">
+          <div class="metric"><strong>72%</strong>今日打卡率</div>
+          <div class="metric"><strong>38</strong>未打卡人数</div>
+          <div class="metric"><strong>12h</strong>累计运动时长</div>
+          <div class="metric"><strong>5</strong>待处理异常</div>
+        </div>
+        <div class="grid cols-2" style="margin-top: 16px;">
+          <div class="placeholder"><strong>趋势图</strong><br />按天展示有效打卡人数和运动时长，判断活动热度是否下降。</div>
+          <div class="placeholder"><strong>异常队列</strong><br />待确认过久、发送失败、manual 提醒、被举报或需作废记录。</div>
+          <div class="placeholder"><strong>快捷动作</strong><br />进入打卡管理、提醒任务、排行榜重算、企业微信测试发送。</div>
+          <div class="placeholder"><strong>隐私限制</strong><br />看板不展示健康咨询原文和私密图片。</div>
+        </div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">05 Role Views</div>
+        <h2>按角色讲页面，初学者更容易理解为什么要这么多入口。</h2>
+        <div class="grid cols-3">
+          <div class="card">
+            <strong>员工端</strong>
+            <ul class="clean">
+              <li>今日打卡</li>
+              <li>我的记录</li>
+              <li>排行榜</li>
+              <li>AI 教练</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>活动管理员端</strong>
+            <ul class="clean">
+              <li>运营看板</li>
+              <li>打卡管理</li>
+              <li>排行榜管理</li>
+              <li>提醒任务</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>企业管理员端</strong>
+            <ul class="clean">
+              <li>企业微信配置</li>
+              <li>成员映射</li>
+              <li>角色权限</li>
+              <li>系统设置</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" id="wecom">
+        <div class="kicker">06 WeCom</div>
+        <h2>企业微信接入要分清“公开群消息”和“个人消息”。</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <strong>群机器人</strong>
+            <p>适合公开场景：每日小贴士、每周排行榜、群内 @ 咨询。</p>
+            <ul class="clean">
+              <li>不适合公开点名未打卡成员</li>
+              <li>发送失败记录到提醒任务</li>
+              <li>webhook 密钥不能提交仓库</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>自建应用</strong>
+            <p>适合个人场景：OAuth 登录、userid 映射、未打卡个人提醒。</p>
+            <ul class="clean">
+              <li>需要企业微信管理员权限</li>
+              <li>权限不可用时降级到 Web 看板</li>
+              <li>access token 缓存在 Redis</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">讲解重点：群里只放适合大家看的信息，个人提醒不要变成公开压力。</div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">13 WeCom Setup</div>
+        <h2>企业微信接入可以按两条线讲：先群机器人，再自建应用。</h2>
+        <table class="table-sketch">
+          <thead>
+            <tr>
+              <th>步骤</th>
+              <th>群机器人</th>
+              <th>自建应用</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1. 准备权限</td>
+              <td>群里添加机器人，拿到 webhook key</td>
+              <td>管理员创建应用，准备 corp id、agent id、secret</td>
+            </tr>
+            <tr>
+              <td>2. 系统配置</td>
+              <td>Web 配置密钥引用，绑定活动</td>
+              <td>配置可信域名、OAuth 回调、消息权限</td>
+            </tr>
+            <tr>
+              <td>3. 测试</td>
+              <td>发送测试小贴士到群</td>
+              <td>OAuth 登录并向指定 userid 发测试消息</td>
+            </tr>
+            <tr>
+              <td>4. 降级</td>
+              <td>失败进入重试和管理员查看</td>
+              <td>个人提醒不可用时转为 manual 任务</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">14 API Map</div>
+        <h2>前端每个动作都要能找到后端接口和数据变化。</h2>
+        <div class="api-map">
+          <div class="api-row"><code>POST /api/checkins/recognize</code>文本识别，创建待确认打卡和识别结果。</div>
+          <div class="api-row"><code>POST /api/checkins/:id/submit</code>员工确认，打卡进入有效统计。</div>
+          <div class="api-row"><code>GET /api/leaderboards/current</code>读取当前排行榜快照和规则说明。</div>
+          <div class="api-row"><code>POST /api/admin/checkins/:id/invalidate</code>管理员作废异常记录，并写审计日志。</div>
+          <div class="api-row"><code>GET /api/admin/reminders</code>查看待发送、失败、manual 提醒任务。</div>
+          <div class="api-row"><code>POST /api/admin/wecom/test-message</code>测试企业微信配置是否可用。</div>
+        </div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">07 Data Model</div>
+        <h2>数据表先记住五组：人、活动、打卡、榜单、提醒。</h2>
+        <table class="table-sketch">
+          <thead>
+            <tr>
+              <th>表</th>
+              <th>用来做什么</th>
+              <th>新手理解</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>members</code></td>
+              <td>员工、企业微信 userid、角色</td>
+              <td>谁在参加活动</td>
+            </tr>
+            <tr>
+              <td><code>activities</code></td>
+              <td>活动周期、规则、提醒时间</td>
+              <td>这次活动怎么玩</td>
+            </tr>
+            <tr>
+              <td><code>checkins</code></td>
+              <td>打卡内容、状态、修正与作废</td>
+              <td>每个人每天交了什么</td>
+            </tr>
+            <tr>
+              <td><code>leaderboard_entries</code></td>
+              <td>排名、得分、打卡天数、运动时长</td>
+              <td>榜单上怎么排</td>
+            </tr>
+            <tr>
+              <td><code>reminder_tasks</code></td>
+              <td>未打卡提醒、发送状态、失败原因</td>
+              <td>谁还需要提醒</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="slide">
+        <div class="kicker">16 Data Relationships</div>
+        <h2>数据表关系可以这样理解：活动把人、打卡、榜单和提醒串起来。</h2>
+        <div class="db-map">
+          <div class="db-card"><strong>members</strong><br /><span>员工身份、部门、角色、wecom_userid。</span></div>
+          <div class="db-card"><strong>activities</strong><br /><span>活动周期、规则、提醒时间。</span></div>
+          <div class="db-card"><strong>checkins</strong><br /><span>每天的打卡状态和最终统计字段。</span></div>
+          <div class="db-card"><strong>leaderboards</strong><br /><span>按周期生成快照和排名条目。</span></div>
+          <div class="db-card"><strong>reminders</strong><br /><span>未打卡提醒、失败、manual、重试。</span></div>
+        </div>
+        <div class="grid cols-2" style="margin-top: 18px;">
+          <div class="card"><strong>AI 结果单独存</strong><p><code>recognition_results</code> 保存模型输出、置信度和提示，方便解释和追踪。</p></div>
+          <div class="card"><strong>操作必须留痕</strong><p><code>audit_logs</code> 记录管理员作废、配置修改和敏感操作。</p></div>
+        </div>
+      </article>
+
+      <article class="slide">
+        <div class="kicker">08 Safety</div>
+        <h2>AI 教练可以给建议，但不能像医生一样诊断。</h2>
+        <div class="grid cols-3">
+          <div class="card">
+            <strong>normal</strong>
+            <p>普通运动、饮食、健康知识，可以给低风险建议。</p>
+          </div>
+          <div class="card">
+            <strong>caution</strong>
+            <p>涉及个人身体状况时要保守回答，并说明不是医疗建议。</p>
+          </div>
+          <div class="card">
+            <strong>escalate</strong>
+            <p>胸痛、晕厥、急性损伤、药物、孕产、极端减重，必须建议专业帮助。</p>
+          </div>
+        </div>
+        <div class="callout">讲解重点：健康安全不是文案问题，是系统必须内置的分类和拒答流程。</div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">18 Local Storage</div>
+        <h2>文件采用本地存储，但不能把上传目录直接暴露出去。</h2>
+        <div class="grid cols-2">
+          <div class="card">
+            <strong>存储约定</strong>
+            <ul class="clean">
+              <li>根目录由 <code>LOCAL_STORAGE_ROOT</code> 指定。</li>
+              <li>按组织、活动、日期分层保存。</li>
+              <li>数据库只保存相对路径，不保存绝对磁盘路径。</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>访问约定</strong>
+            <ul class="clean">
+              <li>必须通过后端鉴权路由读取。</li>
+              <li>删除先标记状态，再由清理任务删磁盘文件。</li>
+              <li>MVP 图片入口可保留，但不作为强制上线能力。</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" id="plan">
+        <div class="kicker">09 Build Plan</div>
+        <h2>实施顺序：先跑通闭环，再接企业微信，再增强体验。</h2>
+        <div class="timeline">
+          <div class="milestone">
+            <div class="week">阶段 1</div>
+            <div><strong>基础工程</strong><br />Vue 3 工作台、Node.js/NestJS API、PostgreSQL、Redis、Prisma、本地文件目录。</div>
+          </div>
+          <div class="milestone">
+            <div class="week">阶段 2</div>
+            <div><strong>打卡闭环</strong><br />成员、活动、文本打卡、AI/规则解析、用户确认、修正撤回。</div>
+          </div>
+          <div class="milestone">
+            <div class="week">阶段 3</div>
+            <div><strong>榜单与提醒</strong><br />排行榜快照、未打卡提醒任务、管理员看板、失败重试。</div>
+          </div>
+          <div class="milestone">
+            <div class="week">阶段 4</div>
+            <div><strong>企业微信接入</strong><br />群机器人小贴士和周榜，自建应用 OAuth、userid、个人提醒。</div>
+          </div>
+          <div class="milestone">
+            <div class="week">阶段 5</div>
+            <div><strong>AI 安全与增强</strong><br />健康咨询分类、拒答模板、免责声明、图片识别扩展。</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">20 Acceptance</div>
+        <h2>验收时不要只问“页面有没有”，要问闭环是否真的成立。</h2>
+        <div class="question-list">
+          <div class="question">员工能不能从文本输入、AI 识别、手动修正到确认提交，完整完成一次有效打卡？</div>
+          <div class="question">排行榜是否只统计有效记录，并能解释排序规则和更新时间？</div>
+          <div class="question">群机器人能否发送小贴士和周榜，自建应用不可用时是否能降级为 manual 提醒？</div>
+          <div class="question">管理员作废、重试、配置测试等关键操作是否有审计记录？</div>
+          <div class="question">AI 对胸痛、晕厥、急性损伤、药物、孕产、极端减重等高风险问题是否拒绝诊断？</div>
+        </div>
+      </article>
+
+      <article class="slide compact">
+        <div class="kicker">10 What To Review</div>
+        <h2>和同事沟通时，最后确认这五件事。</h2>
+        <div class="grid cols-2">
+          <div class="card"><strong>技术栈</strong><p>Vue 3、Node.js/NestJS、PostgreSQL、Redis/BullMQ、Prisma、本地存储。</p></div>
+          <div class="card"><strong>企业微信权限</strong><p>是否能用自建应用、OAuth、userid 和应用消息。</p></div>
+          <div class="card"><strong>排行榜规则</strong><p>有效打卡天数、累计时长、平局规则、补卡是否计入。</p></div>
+          <div class="card"><strong>隐私策略</strong><p>图片本地存储、访问权限、删除策略、咨询日志保留。</p></div>
+          <div class="card"><strong>AI 安全</strong><p>高风险问题拒答，普通问题才给低风险建议。</p></div>
+          <div class="card"><strong>验证方式</strong><p>自动测试、企业微信测试消息、页面隐私检查、知识库回写。</p></div>
+        </div>
+      </article>
+    </section>
+
+    <p class="footer-note">Open Fit MVP 方案讲解页。建议演示时从上往下滚动，也可以打印为 PDF。</p>
+  </main>
+</body>
+</html>

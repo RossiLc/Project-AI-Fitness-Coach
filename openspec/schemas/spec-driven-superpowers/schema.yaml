@@ -1,0 +1,123 @@
+name: spec-driven-superpowers
+version: 1
+description: 带有 Superpowers 运行时优先调用、显式评审门禁和执行计划的规格驱动工作流
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: 变更提案
+    template: proposal.md
+    instruction: >
+      创建变更提案，说明为什么做、做什么、成功标准、不做事项和影响范围。
+      如果变更是从 0 到 1 产品、跨端平台、企业集成、架构选型或多模块系统，
+      必须明确标记为“方案级变更”，并在成功标准中要求技术选型、前后端范围、
+      集成方案、数据模型、流程架构、验证矩阵和落地任务全部覆盖。
+      如果 Superpowers brainstorming 技能可用，范围不清晰时优先调用该技能。
+      正文使用中文。
+    requires: []
+
+  - id: specs
+    generates: specs/**/*.md
+    description: 需求规格
+    template: spec.md
+    instruction: >
+      为 proposal 中列出的每个能力创建 spec 文件。
+      使用 ADDED、MODIFIED、REMOVED 或 RENAMED Requirements。
+      每条 Requirement 至少包含一个 Scenario。
+      Requirement 正文必须包含 SHALL 或 MUST。
+      正文使用中文。
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: 技术设计
+    template: design.md
+    instruction: >
+      创建设计文档，说明架构、关键决策、状态模型、风险和迁移计划。
+      对方案级变更，design.md 必须达到可落地方案深度，至少覆盖：
+      技术选型与取舍、系统架构、前端工作台信息架构、后端服务边界、
+      API 契约、企业集成、AI 服务链路、数据表设计、状态机、端到端流程、
+      权限与安全、部署运维、可观测性、验证矩阵和后续演进。
+      如果缺少上述任一关键部分，不能视为 ready。
+      如果 Superpowers brainstorming 技能可用，复杂设计优先调用该技能。
+      正文使用中文。
+    requires:
+      - specs
+
+  - id: review
+    generates: review.md
+    description: 实现前准备度门禁
+    template: review.md
+    instruction: >
+      创建实现前准备度门禁。必须明确 Readiness Decision、Blocked By、
+      Validation Focus 和 Key Risks。根据风险决定是否启用 TDD、验证保留、
+      系统化调试、代码审查、子任务、并行、worktree 或分支收尾模式。
+      对方案级变更，必须检查 design.md 是否包含技术选型、前端、后端、
+      集成、数据模型、流程、部署、安全和验证矩阵；缺失时 Readiness Decision
+      必须为 blocked 或 ready with conditions。
+      正文使用中文。
+    requires:
+      - specs
+      - design
+
+  - id: tasks
+    generates: tasks.md
+    description: 任务清单
+    template: tasks.md
+    instruction: >
+      创建粗粒度任务清单。所有任务必须使用 - [ ] X.Y 任务描述。
+      任务必须可验证，并按依赖顺序排列。正文使用中文。
+    requires:
+      - review
+      - specs
+      - design
+
+  - id: plan
+    generates: plan.md
+    description: 执行计划
+    template: plan.md
+    instruction: >
+      创建执行计划。plan.md 是执行驱动，tasks.md 是粗粒度事实来源。
+      如果 Superpowers writing-plans 技能可用，优先调用该技能。
+      必须包含 Scope、Covers、Plan Type、Execution Strategy、Ordered Steps、
+      Validation Per Step、Files / Owners、Completion Checkpoint、
+      Knowledge Base Writeback。对方案级变更，必须按前端、后端、数据、
+      企业集成、AI、调度任务、部署验证和知识库回写拆分执行单元。
+      正文使用中文。
+    requires:
+      - tasks
+      - review
+
+apply:
+  requires:
+    - plan
+  tracks: tasks.md
+  instruction: |
+    实现前必须阅读 proposal.md、specs、design.md、review.md、tasks.md 和 plan.md。
+
+    Superpowers 运行时策略：
+    - 如果当前 Agent 环境中存在 Superpowers 技能，必须优先调用对应真实技能。
+    - 如果技能不可用或调用失败，才进入 schema-only fallback。
+    - 最终回复必须说明本次是 runtime-backed 还是 schema-only fallback。
+
+    模式到技能映射：
+    - 常规计划执行：executing-plans
+    - 计划编写或重写：writing-plans
+    - 测试先行：test-driven-development
+    - 完成前验证：verification-before-completion
+    - 系统化调试：systematic-debugging
+    - 请求代码审查：requesting-code-review
+    - 处理审查意见：receiving-code-review
+    - 子任务开发：subagent-driven-development
+    - 并行执行：dispatching-parallel-agents
+    - worktree 隔离：using-git-worktrees
+    - 分支收尾：finishing-a-development-branch
+
+    实现前检查：
+    - Readiness Decision 为 blocked 时停止实现。
+    - ready with conditions 必须先解决或明确追踪。
+    - 未完成任务必须被 plan.md 的 Covers 覆盖。
+    - 高优先级 Validation Focus 必须映射到执行或验证步骤。
+    - 如果 plan.md 改变任务边界、顺序或完成定义，继续前必须更新 tasks.md。
+    - 完成前必须执行 Knowledge Base Writeback；稳定项目知识变化时，必须更新 docs/知识库/。

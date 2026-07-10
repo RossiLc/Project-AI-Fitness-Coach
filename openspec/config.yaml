@@ -1,0 +1,45 @@
+schema: spec-driven-superpowers
+
+context: |
+  项目名称：Open Fit，面向企业内部员工的 AI 健身教练与运动打卡平台。
+
+  运行形态：
+  1. 企业微信机器人：群内 @ 回复运动、饮食、健康咨询；定时推送健康小贴士；每周推送排行榜卡片。
+  2. Web 运动打卡平台：员工上传运动图片或输入文字打卡；系统识别运动内容、估算卡路里，并生成仪表盘、排行榜和未打卡提醒。
+
+  工作流约束：
+  - 默认使用 spec-driven-superpowers schema。
+  - OpenSpec 负责变更生命周期、产物依赖和规格校验。
+  - Superpowers 负责执行纪律、技能运行时和门禁约束。
+  - 当前 Agent 环境可见 Superpowers 技能时，必须优先调用真实技能。
+  - 技能不可见或调用失败时，才退回 schema-only fallback。
+  - AGENTS.md 是 Agent 主入口。
+  - CLAUDE.md 是 Claude 类工具入口。
+  - docs/知识库/ 是长期知识库。
+  - 每次需求结束前必须执行知识库回写检查。
+
+  语言约束：
+  - 项目自写文档、OpenSpec 产物、模板注释和新增说明统一使用中文。
+  - 英文专有名词可以保留，但必须放在中文语境中解释。
+  - Superpowers 上游运行时资产允许保留英文和原始结构，以保证技能触发、脚本和门禁能力不被破坏。
+
+rules:
+  proposal:
+    - 使用中文说明变更动机、范围、成功标准和不做事项。
+    - 能力名称使用 kebab-case 英文标识，能力描述使用中文。
+  specs:
+    - 使用中文需求文本。
+    - 保留 OpenSpec 结构关键词 ADDED、MODIFIED、REMOVED、RENAMED、Requirement、Scenario、WHEN、THEN。
+    - 每条 Requirement 至少包含一个 Scenario。
+  design:
+    - 使用中文描述架构、关键决策、权衡、状态模型和迁移计划。
+  review:
+    - 明确填写 Readiness Decision：blocked、ready with conditions 或 ready。
+    - 将高优先级 Validation Focus 映射到后续 plan.md 的执行或验证步骤。
+  tasks:
+    - 使用中文任务描述。
+    - 所有任务使用复选框格式：`- [ ] X.Y 任务描述`。
+  plan:
+    - plan.md 是实现阶段执行驱动；tasks.md 是粗粒度进度事实来源。
+    - 每个执行块必须用 Covers 明确映射到 tasks.md 的任务编号。
+    - 完成检查必须包含知识库回写判断。
