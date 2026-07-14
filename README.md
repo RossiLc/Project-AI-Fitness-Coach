@@ -76,12 +76,81 @@ codex --version
 
 ## 项目需求简述
 
+## 本地开发端口
+
+为避免和常见本地服务冲突，Open Fit 默认使用上移后的宿主机端口：
+
+| 服务 | 地址 |
+| --- | --- |
+| Web 工作台 | `http://localhost:15173` |
+| API health | `http://localhost:13100/api/health` |
+| PostgreSQL | `localhost:15432` |
+| Redis | `localhost:16380` |
+
+对应环境变量在 `.env` / `.env.example` 中维护：`WEB_PORT=15173`、`API_PORT=13100`、`DATABASE_URL` 使用 `15432`、`REDIS_URL` 使用 `16380`。
+
+## 数据库命令边界
+
+根目录的数据库命令都以 `dev:db:*` 命名，表示只用于本地开发和演示初始化：
+
+```powershell
+pnpm dev:db:generate
+pnpm dev:db:push
+pnpm dev:db:seed
+pnpm dev:db:setup
+```
+
+- `dev:db:generate`：根据 Prisma schema 生成本地 Prisma Client。
+- `dev:db:push`：把当前 Prisma schema 快速同步到本地开发数据库。
+- `dev:db:seed`：写入本地演示数据。
+- `dev:db:setup`：串行执行以上三步。
+
+生产环境不使用 `prisma db push`。生产数据库结构应通过迁移任务升级，例如 `prisma migrate deploy`；内置基础数据应通过幂等 bootstrap/seed 任务写入，并作为部署流水线的一部分执行。涉及字段替换或状态变更时，应按兼容发布处理：先加新结构并兼容读写，再迁移数据，最后移除旧结构。
+
 ### 企业微信 AI 健身教练
 
 - 群成员 @ 机器人后，机器人回答运动、饮食、健康类问题。
 - 每天 9 点自动推送健康小贴士。
 - 每周推送活动排行榜卡片。
 - 健康建议必须明确非医疗诊断边界。
+
+### 企业微信智能机器人配置
+
+员工侧使用两个企业微信智能机器人，后端通过 SDK 长连接接入，不提供智能机器人 URL 回调入口。
+
+| 机器人 | 用途 | 环境变量 |
+| --- | --- | --- |
+| Open Fit 打卡助手 | 处理运动打卡、补图、确认提交和打卡状态。 | `WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET` |
+| Open Fit AI 教练 | 处理低风险运动建议、活动规则、活动信息和排行榜查询，不创建打卡。 | `WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET` |
+
+机器人收到企业微信入站消息时会优先使用 `from.userid` 识别成员；如果该 `userid` 首次出现，系统会自动创建普通员工档案并继续处理本次消息。管理员后续可在 Web 工作台补全姓名、部门和角色。缺少 `userid` 的消息不会匿名入库。
+
+AI 教练咨询链路不使用模拟 AI 回复：用户输入先经过本地轻量安全围栏，低风险问题才调用 OpenAI-compatible 真实模型。模型输出还会再做一次安全校验，命中密钥泄漏、提示词注入、敏感内容或健康高风险时会替换为安全提示。未配置 `AI_BASE_URL` 或 `AI_API_KEY` 时会明确提示 AI 服务尚未配置；你后续只需要在 `.env` 或部署密钥中替换 URL、key 和模型名。
+
+当前本地安全围栏采用：
+
+- `@andersmyrmel/vard`：检测通用 prompt injection、角色操控、系统提示词泄漏、delimiter 注入和编码绕过。
+- `sensitive-word-tool`：本地 DFA 敏感词检测，结合内置词表和 `LOCAL_GUARDRAIL_EXTRA_WORDS` 企业自定义词。
+- Open Fit 中文规则：补充中文提示词注入、PII、secret、健康医疗高风险和极端减重场景。
+
+本地联调时在 `.env` 中填写真实 Bot ID 和 Secret，并设置：
+
+```env
+WECOM_MOCK_MODE=false
+WECOM_CHECKIN_BOT_ID=你的打卡助手BotID
+WECOM_CHECKIN_BOT_SECRET=你的打卡助手Secret
+WECOM_COACH_BOT_ID=你的AI教练BotID
+WECOM_COACH_BOT_SECRET=你的AI教练Secret
+AI_BASE_URL=你的模型服务/v1
+AI_API_KEY=你的key
+AI_MODEL=gpt-5.5
+GUARDRAIL_PROVIDER=local
+LOCAL_GUARDRAIL_ENGINES=vard,sensitive-word-tool
+LOCAL_GUARDRAIL_MAX_INPUT_LENGTH=3000
+LOCAL_GUARDRAIL_EXTRA_WORDS=
+```
+
+不要把真实 Secret 写入 README、`.env.example` 或任何会提交到 Git 的文件；真实值只放本地 `.env` 或部署环境的密钥配置中。
 
 ### Web 运动打卡平台
 

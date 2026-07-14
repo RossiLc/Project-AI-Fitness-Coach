@@ -1,5 +1,17 @@
 # Design
 
+## Current Decision: 方案 B 单管理员工作台
+
+当前实现阶段采用方案 B：员工端不提供 Web 使用入口，普通员工只通过企业微信两个智能机器人完成核心流程；Web 收敛为单管理员运营后台。此前设计中的员工 Web 区、企业微信配置页、角色权限页和系统设置页不再作为当前 Web 产品面向用户的页面。
+
+单管理员 Web 后台保留四个模块：
+- 运营看板：今日打卡人数、未打卡人数、总人数、打卡率。
+- 成员管理：成员列表、今日未打卡筛选、成员打卡明细、打卡作废/恢复、提醒未打卡。
+- 活动配置：当前活动规则配置，并作为 AI 教练活动知识来源。
+- 排行榜管理：参与天数排行榜，支持后续扩展其他排行榜。
+
+提醒未打卡的群消息默认不公开未打卡成员名单，只推送未打卡人数和打卡行动提示。
+
 ## Context
 
 Open Fit 面向企业内部员工，产品形态包括企业微信 AI 健身教练和 Web 运动打卡平台。MVP 需要同时解决“员工愿意打卡”“管理员能运营活动”“企业微信能触达成员”“AI 输出安全可控”“排行榜可信可解释”五类问题。
@@ -23,11 +35,11 @@ Open Fit 面向企业内部员工，产品形态包括企业微信 AI 健身教�
 
 ## Proposed Design
 
-Open Fit MVP 使用“Web 工作台 + 模块化后端 + PostgreSQL + Redis 队列 + 企业微信接入 + AI 适配层”的架构。
+Open Fit MVP 使用“企业微信群机器人员工入口 + Web 管理工作台 + 模块化后端 + PostgreSQL + Redis 队列 + 企业微信接入 + AI 适配层”的架构。
 
 ### 产品一句话
 
-Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 + 企业微信触达层”。它不是单纯的聊天机器人，也不是单纯的打卡表单，而是把员工每天的运动行为、AI 辅助识别、活动统计、排行榜和提醒连接成一个闭环。
+Open Fit 是企业健身活动的“企业微信群参与入口 + 记录系统 + 运营后台 + 企业微信触达层”。它不是单纯的聊天机器人，也不是单纯的打卡表单，而是把员工每天的运动行为、AI 辅助识别、活动统计、排行榜和提醒连接成一个闭环。
 
 ### 对初学者的产品解释
 
@@ -35,7 +47,7 @@ Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 +
 
 1. **员工的运动日记**：员工每天用一句话记录运动，系统帮忙整理成结构化打卡。
 2. **管理员的活动台账**：管理员不再靠翻群消息统计，而是在后台看到参与率、排行榜、异常记录和提醒任务。
-3. **企业微信的触达助手**：群机器人负责公开的小贴士和榜单，自建应用负责登录、身份识别和个人提醒。
+3. **企业微信的触达助手**：智能机器人负责员工群内打卡、咨询和查询，群机器人 webhook 负责公开推送，自建应用负责更强身份能力和个人消息。
 
 因此，Open Fit 的核心价值不是“AI 替人运动”或“聊天机器人更聪明”，而是让企业健身活动有清晰的数据闭环：谁参加、是否打卡、打卡是否有效、榜单如何计算、谁需要提醒、哪些内容不能公开。
 
@@ -43,10 +55,10 @@ Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 +
 
 | 问题 | 对外讲法 | 设计含义 |
 | --- | --- | --- |
-| 它是什么？ | 企业内部健身活动的打卡、统计、提醒和 AI 辅助平台。 | Web 工作台是主系统，企业微信是入口和触达层。 |
+| 它是什么？ | 企业内部健身活动的打卡、统计、提醒和 AI 辅助平台。 | 企业微信群机器人是员工入口，Web 工作台是管理员主系统。 |
 | 它不是什么？ | 不是医疗诊断工具，不是单纯群机器人，不是完整运动 App。 | AI 必须有安全边界，MVP 不做可穿戴设备和复杂训练计划。 |
 | MVP 先做什么？ | 先让文本打卡闭环稳定可用。 | 识别、确认、统计、提醒、榜单优先于图片识别和积分商城。 |
-| 为什么要 Web？ | 群消息适合提醒，不适合做可追踪的数据管理。 | 管理、审计、配置、纠错都必须在 Web 工作台完成。 |
+| 为什么要 Web？ | 群消息适合员工参与，不适合管理员做可追踪的数据管理。 | 管理、审计、配置、纠错都必须在 Web 工作台完成；员工 Web 入口只做补充和调试。 |
 | 为什么要企业微信？ | 员工在企业微信里被触达最自然。 | 群机器人与自建应用承担不同权限和隐私职责。 |
 
 ### 一个工作日里会发生什么
@@ -54,7 +66,7 @@ Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 +
 | 时间/动作 | 发生的事 | 系统支撑 |
 | --- | --- | --- |
 | 上午 9 点 | 企业微信群收到一条低风险运动小贴士 | worker 触发小贴士任务，群机器人发送 |
-| 白天任意时间 | 员工打开 Web 工作台提交文本打卡 | Vue 工作台调用打卡识别 API |
+| 白天任意时间 | 员工在企业微信群 @ 机器人提交文本或图片打卡 | 智能机器人回调调用打卡识别 API，Web 员工页仅作补充入口 |
 | 提交后 | AI/规则解析出运动类型、时长、距离和估算热量 | Node.js 后端保存识别结果 |
 | 确认时 | 员工修正或确认识别结果 | 打卡记录从 `recognized` 变为 `submitted` |
 | 晚上 20 点 | 系统识别未打卡成员并生成提醒任务 | BullMQ worker 扫描活动与打卡记录 |
@@ -81,6 +93,31 @@ Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 +
 | AI | 文本解析、健康咨询安全分类、拒答模板 | 多模态识别、个性化训练建议、内容运营后台 |
 | 管理 | 活动配置、打卡管理、提醒任务、企业微信配置 | 多活动模板、审批流、运营报表导出 |
 
+### 第一阶段可运行框架边界
+
+第一阶段目标不是交付完整业务 MVP，而是交付一个“能跑、能点、能接、能扩”的纵向骨架。它需要让团队和业务同事看到整体框架已经成立：Web 工作台能打开，后端模块边界存在，数据库和队列能启动，文本打卡能简单体验，企业微信机器人能 mock 或真实发送测试消息。
+
+第一阶段验收口径：
+
+| 能力 | 第一阶段必须交付 | 第一阶段暂不阻塞 |
+| --- | --- | --- |
+| 工程结构 | `apps/web`、`apps/api`、`apps/worker`、`packages/shared`、`infra/docker`、`storage/uploads` | 生产级 CI/CD、Kubernetes、多环境发布体系 |
+| Web 工作台 | 三类角色导航、今日打卡闭环、运营看板、提醒任务、企业微信配置页骨架 | 完整高保真 UI、全部后台 CRUD、复杂权限后台 |
+| 后端 API | 健康检查、mock auth、当前活动、文本打卡、我的记录、dashboard、提醒任务、企业微信测试发送 | 真实企业微信 OAuth、通讯录同步、完整活动配置 |
+| 数据模型 | Prisma 首批核心表、seed 数据、状态枚举、配置表和审计表骨架 | 全部索引优化、复杂保留策略、图片治理完整实现 |
+| 企业微信 | 群机器人 webhook 测试发送，支持 mock 模式和真实 webhook 模式 | 自建应用个人消息、生产 OAuth、成员 userid 自动同步 |
+| Worker | BullMQ 队列、企业微信消息 job、测试小贴士/示例周榜触发 | 完整未打卡扫描、周榜正式调度、复杂重试运营 |
+| AI | 规则解析器模拟文本识别，保留 AI adapter 边界 | 真实模型调用、健康咨询完整分类、图片识别 |
+| 文件 | 本地上传目录和鉴权访问路由占位，禁止静态公开 | 真实图片上传、缩略图、删除清理任务 |
+
+第一阶段建议采用 mock 登录和 seed 数据。mock 不是临时乱写，而是明确为后续企业微信 OAuth 替换预留边界：前端只依赖 `GET /api/me`，后端通过 `CurrentUser` 和角色守卫传递身份，后续替换认证来源时不改业务页面。
+
+第一阶段完成后，后续阶段可以沿三条线并行推进：
+
+1. 企业微信真实集成：OAuth、userid、自建应用消息、成员同步。
+2. 业务闭环深化：排行榜快照、未打卡扫描、管理员作废、活动配置。
+3. AI 与图片增强：真实 AI 解析、健康安全分类、图片上传识别和删除策略。
+
 ## Technical Options
 
 | 领域 | 推荐方案 | 备选方案 | 取舍 |
@@ -97,17 +134,21 @@ Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 +
 
 推荐技术栈：Vue 3、TypeScript、Vite、Node.js、NestJS、PostgreSQL、Redis/BullMQ、Prisma、本地磁盘存储、Docker Compose。
 
+AI 联调约定：第一阶段保留 OpenAI-compatible 配置入口。AI 教练咨询不使用模拟 AI 回复：高风险问题由安全围栏直接拒答，低风险问题必须调用真实模型；未配置 `AI_BASE_URL` 或 `AI_API_KEY` 时返回明确的未配置提示。用户已确认后续使用 GPT-5.5，代码和环境变量预留 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL=gpt-5.5`，联调时由用户直接替换 `.env` 中的 URL 和 key。`AI_MOCK_MODE` 仅用于打卡解析、图片识别等开发降级链路。
+
+AI 教练本地安全围栏选型：第一阶段不额外部署独立 guardrail 服务，采用 API 进程内轻量组件。`LocalGuardrailService` 组合 `@andersmyrmel/vard`、`sensitive-word-tool`、Open Fit 中文提示词注入规则、PII/secret 正则和健康高风险规则；`CoachSafetyService` 在企业微信 AI 教练和 Web Coach API 中统一复用。安全围栏执行输入和输出双向校验：输入未通过时不调用真实 AI Provider；模型输出命中密钥泄漏、系统提示词泄漏、敏感词、PII 或健康高风险时替换为安全提示。
+
 ## System Architecture
 
 ### 运行时组件
 
-- `web-workbench`：Vue 3 + Vite Web 工作台，服务员工端、管理员端和企业配置端。
+- `web-workbench`：Vue 3 + Vite Web 工作台，主要服务活动管理员端和企业配置端，员工端保留为开发调试和补充录入入口。
 - `api-server`：Node.js + NestJS 模块化后端，提供 REST API、认证、业务服务和企业微信回调。
 - `worker`：Node.js + NestJS worker 进程，消费 BullMQ 队列，执行提醒、排行榜、小贴士和消息发送。
 - `postgres`：主业务数据库。
 - `redis`：缓存、队列和任务去重。
 - `local-file-storage`：MVP 本地文件存储目录，保存后续图片原图、缩略图或导入文件。
-- `wecom`：企业微信群机器人 webhook、自建应用 API、OAuth。
+- `wecom`：企业微信智能机器人 SDK 长连接、群机器人 webhook、自建应用 API、OAuth。
 - `ai-provider`：文本解析、健康咨询和后续图片识别模型。
 
 ### 模块边界
@@ -118,7 +159,7 @@ Open Fit 是企业健身活动的“参与入口 + 记录系统 + 运营后台 +
 - `checkins`：打卡记录、识别结果、确认修正、撤回作废。
 - `leaderboards`：排行榜计算、快照、群卡片数据。
 - `reminders`：未打卡名单、提醒任务、发送状态。
-- `wecom`：群机器人、自建应用 token、消息发送、回调验签。
+- `wecom`：智能机器人长连接、群机器人、自建应用 token、消息发送。
 - `ai`：文本解析、健康咨询、安全分类、模型适配。
 - `admin`：审核、配置、仪表盘。
 - `audit`：关键操作审计。
@@ -350,9 +391,29 @@ Content-Type: application/json
 
 ## Enterprise WeCom Integration
 
+### 企业微信智能机器人
+
+Open Fit 面向员工提供两个企业微信智能机器人入口：`Open Fit 打卡助手` 和 `Open Fit AI 教练`。打卡助手只负责打卡、补图、确认提交和打卡状态；AI 教练负责训练建议、活动规则、活动信息和排行榜查询。
+
+本阶段不再使用单机器人承载所有能力。原因是打卡会写入数据库，误判成本高；“跑步 30 分钟后膝盖疼怎么办”这类消息同时包含运动事实和咨询意图，如果单机器人自动分流，容易把咨询误入库。双机器人用入口本身提供业务上下文，更容易解释和验证。
+
+智能机器人入站链路：
+
+1. API 服务启动时读取 `WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`。
+2. `WeComStreamBotService` 使用官方 Node SDK `@wecom/aibot-node-sdk` 建立企业微信 WebSocket 长连接；SDK 负责认证、心跳和重连。
+3. SDK 收到 `message.text`、`message.image` 或 `message.mixed` 后，适配层归一化为 `text + attachments[]` 和 `botRole=checkin|coach`。
+4. 归一化事件继续调用 `WeComBotService.handleEvent()`，由业务服务按企业微信 `userid` 完成本地成员映射；首次出现的真实 `userid` 自动创建员工档案，缺少 `userid` 时拒绝匿名入库。
+5. `WeComStreamBotService` 使用 SDK `replyStream` 将业务回复发回企业微信。
+6. 打卡助手收到文字 + 图片时，文字优先调用 `CheckinsService` 生成 `recognized` 待确认记录，并关联图片附件；只收到图片时，调用 AI 图片识别生成待确认记录。
+7. 打卡助手收到纯文字时不创建打卡，提示补发图片；确认意图将最近一条带 active 图片附件的待确认记录提交为 `submitted`。
+8. AI 教练意图先经过健康安全围栏；高风险内容使用拒答模板且不调用模型，低风险内容调用 OpenAI-compatible 真实模型，并通过系统提示词约束为低风险、非医疗建议。
+9. 回复内容只包含本人打卡结果、公开规则或低风险建议，不在群内公开未打卡名单、健康咨询原文或敏感备注。
+
+企业微信联调约定：第一阶段预留长连接配置 `WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`；群机器人出站保留 `WECOM_BOT_WEBHOOK_URL`。开发阶段不提交真实值，联调时由用户替换 `.env`。
+
 ### 群机器人
 
-- 用途：每日 9 点健康小贴士、每周排行榜卡片、群内 @ 咨询。
+- 用途：每日 9 点健康小贴士、每周排行榜卡片、测试发送、降级公告。
 - 配置：每个活动可绑定一个或多个群机器人 webhook。
 - 安全：webhook key 存入服务端密钥配置，不入库明文；数据库只保存配置别名和加密引用。
 - 降级：群机器人不可用时，记录发送失败并在管理员提醒任务中展示。
@@ -383,8 +444,8 @@ Content-Type: application/json
 
 ### 成员同步
 
-- MVP 支持手工导入成员或调用企业微信通讯录 API 同步。
-- `members.wecom_userid` 是优先身份键；若暂缺，使用 `external_id` 临时绑定，并记录迁移任务。
+- MVP 支持机器人首次消息自动建档、手工导入成员或调用企业微信通讯录 API 同步。
+- `members.wecom_userid` 是优先身份键；自动建档成员先使用企业微信 `userid` 作为 `external_id`，显示名和部门可由管理员补全或后续通讯录同步覆盖。
 
 ## AI Service Design
 
@@ -412,6 +473,14 @@ Content-Type: application/json
 - `normal`：普通运动、饮食、健康知识。
 - `caution`：不确定或涉及个人身体情况，回答保守并加免责声明。
 - `escalate`：胸痛、呼吸困难、晕厥、急性损伤、药物、孕产、术后、慢性病急性发作、极端减重；拒绝诊断并建议专业帮助。
+
+### 本地轻量安全围栏
+
+- Prompt Injection：使用 `@andersmyrmel/vard` 检测 instruction override、role manipulation、system prompt leak、delimiter injection 和 encoding；Open Fit 额外维护中文规则，覆盖“忽略之前规则”“泄露系统提示词”“你现在是医生/管理员”“绕过安全限制”等表达。
+- 内容安全：使用 `sensitive-word-tool` 做本地 DFA 敏感词检测，内置一批违禁/敏感词，并通过 `LOCAL_GUARDRAIL_EXTRA_WORDS` 支持企业自定义词。
+- 隐私与密钥：使用本地正则检测手机号、身份证号、邮箱、`sk-` API key、token、secret 等，不保存完整咨询原文。
+- 健康边界：对胸痛、呼吸困难、晕厥、药物、孕产、术后、慢性病急性发作和极端减重等场景直接拒答并建议专业帮助。
+- 输出校验：真实模型输出必须再次通过本地安全围栏，命中风险时返回安全替代回复。
 
 ## Data Model
 
@@ -545,7 +614,7 @@ invalid
 ## Operations
 
 - 开发环境：Docker Compose 启动 PostgreSQL、Redis、api-server、worker、web-workbench，并挂载本地上传目录。
-- 环境变量：`DATABASE_URL`、`REDIS_URL`、`WECOM_CORP_ID`、`WECOM_AGENT_ID`、`AI_API_KEY`、`LOCAL_STORAGE_ROOT`、`LOCAL_STORAGE_PUBLIC_BASE`。
+- 环境变量：`DATABASE_URL`、`REDIS_URL`、`WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_APP_SECRET`、`WECOM_BOT_WEBHOOK_URL`、`WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`LOCAL_STORAGE_ROOT`、`LOCAL_STORAGE_PUBLIC_BASE`。
 - 任务调度：BullMQ repeatable jobs 管理每日小贴士、提醒、周榜。
 - 日志：结构化 JSON 日志，包含 `request_id`、`member_id`、`activity_id`、`job_id`。
 - 监控：任务失败数、企业微信发送失败率、AI 调用失败率、打卡提交成功率。

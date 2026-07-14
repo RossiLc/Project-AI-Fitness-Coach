@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": "."
+  },
+  "exclude": [
+    ".codex/skills/**",
+    ".worktrees/**",
+    "docs/**",
+    "openspec/**",
+    "node_modules/**",
+    "dist/**",
+    "storage/uploads/**"
+  ]
+}

@@ -1,3 +1,16 @@
 .superpowers/
 node_modules/
 dist/
+.env
+.env.*
+!.env.example
+coverage/
+.turbo/
+.vite/
+*.log
+storage/uploads/*
+!storage/uploads/.gitkeep
+.worktrees/
+.pnpm-store/*
+.vscode
+logs/

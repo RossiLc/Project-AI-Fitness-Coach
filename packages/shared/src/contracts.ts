@@ -1,0 +1,268 @@
+import type { BotIntent, CheckinStatus, MemberRole, ReminderStatus } from "./status.js";
+
+export interface CurrentUser {
+  id: string;
+  orgId: string;
+  displayName: string;
+  role: MemberRole;
+  wecomUserid?: string;
+}
+
+export interface RecognizeCheckinRequest {
+  activityId: string;
+  sourceType: "text";
+  text: string;
+}
+
+export interface RecognitionResultDto {
+  sportType: string;
+  durationMin: number;
+  distanceKm?: number;
+  intensity: "low" | "moderate" | "high";
+  calorieEstimate?: number;
+  confidence: number;
+  notice: string;
+}
+
+export interface RecognizeCheckinResponse {
+  checkinId: string;
+  status: CheckinStatus;
+  recognition: RecognitionResultDto;
+}
+
+export interface SubmitCheckinRequest {
+  sportType: string;
+  durationMin: number;
+  distanceKm?: number;
+  intensity: "low" | "moderate" | "high";
+  calorieEstimate?: number;
+}
+
+export interface CheckinRecordDto {
+  id: string;
+  activityId: string;
+  memberId: string;
+  status: CheckinStatus;
+  sportType?: string;
+  durationMin?: number;
+  distanceKm?: number;
+  intensity?: string;
+  calorieEstimate?: number;
+  submittedAt?: string;
+  createdAt: string;
+}
+
+export interface AttachmentDto {
+  id: string;
+  checkinId?: string;
+  localPath: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "active" | "deleted";
+  createdAt: string;
+}
+
+export interface UploadAttachmentRequest {
+  checkinId?: string;
+  activityId: string;
+  filename: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  base64Data: string;
+}
+
+export interface DashboardSummary {
+  todayCheckinCount: number;
+  checkinRate: number;
+  missingCount: number;
+  totalMemberCount: number;
+  totalDurationMin: number;
+  pendingIssueCount: number;
+}
+
+export interface ActivityConfigDto {
+  id: string;
+  name: string;
+  status: string;
+  startAt: string;
+  endAt: string;
+  reminderTime: string;
+  rankingPrimary: "checkin_days";
+  rankingSecondary: "duration_min";
+  makeupWindowDays: number;
+}
+
+export interface UpdateActivityConfigRequest {
+  name: string;
+  reminderTime: string;
+  rankingPrimary: "checkin_days";
+  rankingSecondary: "duration_min";
+  makeupWindowDays: number;
+}
+
+export interface ReminderTaskDto {
+  id: string;
+  memberName: string;
+  remindDate: string;
+  channel: "wecom_app" | "web_manual" | "group_bot";
+  status: ReminderStatus;
+  attemptCount: number;
+  lastError?: string;
+}
+
+export interface LeaderboardEntryDto {
+  rank: number;
+  memberId: string;
+  memberName: string;
+  checkinDays: number;
+  durationMin: number;
+  calorieEstimate: number;
+}
+
+export interface LeaderboardDto {
+  status: "computed" | "empty";
+  rule: string;
+  generatedAt: string;
+  entries: LeaderboardEntryDto[];
+}
+
+export interface AdminCheckinDto extends CheckinRecordDto {
+  memberName: string;
+}
+
+export interface InvalidateCheckinRequest {
+  reason: string;
+}
+
+export interface WeComTestMessageRequest {
+  previewText: string;
+}
+
+export interface WeComSendResult {
+  mode: "mock" | "webhook";
+  ok: boolean;
+  message: string;
+}
+
+export interface MemberDto {
+  id: string;
+  displayName: string;
+  department?: string;
+  role: MemberRole;
+  status: string;
+  externalId?: string;
+  wecomUserid?: string;
+  mappingStatus: "bound" | "unbound";
+}
+
+export interface MemberCheckinHistoryDto {
+  member: MemberDto;
+  checkins: AdminCheckinDto[];
+}
+
+export interface GroupMissingCheckinReminderResult {
+  activityId: string;
+  date: string;
+  missingCount: number;
+  mode: "mock" | "webhook";
+  ok: boolean;
+  message: string;
+}
+
+export interface BindWeComUseridRequest {
+  wecomUserid: string;
+}
+
+export interface SyncWeComMembersResponse {
+  mode: "mock" | "wecom_api";
+  totalLocalMembers: number;
+  created: number;
+  updated: number;
+  message: string;
+}
+
+export interface WeComAppStatusDto {
+  mode: "mock" | "configured" | "missing_config";
+  corpIdConfigured: boolean;
+  agentIdConfigured: boolean;
+  secretConfigured: boolean;
+  callbackUrl?: string;
+  oauthReady: boolean;
+  appMessageReady: boolean;
+  memberSyncReady: boolean;
+}
+
+export interface WeComOAuthLoginUrlResponse {
+  mode: "configured" | "missing_config";
+  url?: string;
+  state: string;
+  message?: string;
+}
+
+export interface WeComOAuthCallbackRequest {
+  code: string;
+  state?: string;
+}
+
+export interface WeComOAuthCallbackResponse {
+  mode: "mock" | "wecom_api";
+  user: CurrentUser;
+  message: string;
+}
+
+export interface WeComAppMessageRequest {
+  toUserId: string;
+  text: string;
+}
+
+export interface WeComAppMessageResult {
+  mode: "mock" | "wecom_api";
+  ok: boolean;
+  message: string;
+}
+
+export interface WeComBotEventRequest {
+  messageId: string;
+  fromUserId: string;
+  text: string;
+  botId?: string;
+  botRole?: WeComBotRole;
+  messageType?: "text" | "image" | "mixed";
+  attachments?: WeComBotAttachment[];
+  chatId?: string;
+}
+
+export type WeComBotRole = "checkin" | "coach";
+
+export interface WeComBotAttachment {
+  kind: "image";
+  mediaId?: string;
+  fileId?: string;
+  url?: string;
+  filename?: string;
+  mimeType?: "image/jpeg" | "image/png" | "image/webp" | string;
+  base64Data?: string;
+  sizeBytes?: number;
+}
+
+export interface AiImageCheckinParseInput {
+  textHint?: string;
+  attachments: WeComBotAttachment[];
+}
+
+export interface WeComBotEventResponse {
+  replyType: "markdown" | "text";
+  text: string;
+  intent: BotIntent;
+  checkinId?: string;
+}
+
+export interface CoachAdviceRequest {
+  question: string;
+}
+
+export interface CoachAdviceResponse {
+  riskLevel: "normal" | "escalate";
+  answer: string;
+  model: string;
+  source: "model" | "safety_template" | "unconfigured" | "model_error";
+}

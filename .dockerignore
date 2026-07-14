@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.env
+.env.*
+!.env.example
+storage/uploads/*
+!storage/uploads/.gitkeep
+.codex
+.worktrees
+coverage
+*.log

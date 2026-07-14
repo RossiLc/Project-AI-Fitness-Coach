@@ -1,0 +1,24 @@
+{
+  "name": "open-fit",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @openfit/api --filter @openfit/worker --filter @openfit/web dev",
+    "build": "pnpm -r --filter @openfit/shared --filter @openfit/api --filter @openfit/worker --filter @openfit/web build",
+    "lint": "pnpm -r --filter @openfit/shared --filter @openfit/api --filter @openfit/worker --filter @openfit/web lint",
+    "typecheck": "pnpm -r --filter @openfit/shared --filter @openfit/api --filter @openfit/worker --filter @openfit/web typecheck",
+    "test": "pnpm -r --filter @openfit/shared --filter @openfit/api --filter @openfit/worker --filter @openfit/web test",
+    "docker:up": "docker compose -f infra/docker/docker-compose.yml up --build",
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "dev:db:generate": "pnpm --filter @openfit/api dev:db:generate",
+    "dev:db:push": "pnpm --filter @openfit/api dev:db:push",
+    "dev:db:seed": "pnpm --filter @openfit/api dev:db:seed",
+    "dev:db:setup": "pnpm dev:db:generate && pnpm dev:db:push && pnpm dev:db:seed",
+    "openspec:validate": "openspec validate prepare-open-fit-mvp"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}

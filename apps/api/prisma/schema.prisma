@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberRole {
+  employee
+  activity_admin
+  org_admin
+}
+
+enum ActivityStatus {
+  draft
+  active
+  paused
+  ended
+}
+
+enum CheckinStatus {
+  draft
+  recognized
+  submitted
+  corrected
+  withdrawn
+  invalid
+}
+
+enum RecognitionStatus {
+  pending
+  succeeded
+  failed
+  confirmed
+  discarded
+}
+
+enum ReminderStatus {
+  pending
+  eligible
+  sent
+  skipped
+  failed
+  manual
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  wecomCorpId String?
+  createdAt   DateTime     @default(now())
+  members     Member[]
+  activities  Activity[]
+  wecomConfigs WeComConfig[]
+}
+
+model Member {
+  id            String       @id @default(cuid())
+  orgId         String
+  wecomUserid   String?
+  externalId    String?
+  displayName   String
+  department    String?
+  role          MemberRole
+  status        String       @default("active")
+  createdAt     DateTime     @default(now())
+  organization  Organization @relation(fields: [orgId], references: [id])
+  checkins      Checkin[]
+  reminders     ReminderTask[]
+  leaderboardEntries LeaderboardEntry[]
+  coachAdviceLogs CoachAdviceLog[]
+
+  @@unique([orgId, wecomUserid])
+  @@index([orgId, role])
+}
+
+model Activity {
+  id           String          @id @default(cuid())
+  orgId        String
+  name         String
+  startAt      DateTime
+  endAt        DateTime
+  status       ActivityStatus  @default(active)
+  ruleJson     Json
+  reminderTime String          @default("20:00")
+  createdAt    DateTime        @default(now())
+  organization Organization    @relation(fields: [orgId], references: [id])
+  checkins     Checkin[]
+  reminders    ReminderTask[]
+  leaderboardSnapshots LeaderboardSnapshot[]
+
+  @@index([orgId, status])
+}
+
+model Checkin {
+  id              String              @id @default(cuid())
+  activityId      String
+  memberId        String
+  status          CheckinStatus       @default(draft)
+  sourceType      String              @default("text")
+  sportType       String?
+  durationMin     Int?
+  distanceKm      Float?
+  intensity       String?
+  calorieEstimate Int?
+  isMakeup        Boolean             @default(false)
+  submittedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  activity        Activity            @relation(fields: [activityId], references: [id])
+  member          Member              @relation(fields: [memberId], references: [id])
+  recognitions    RecognitionResult[]
+  attachments     Attachment[]
+
+  @@index([activityId, memberId, submittedAt])
+  @@index([activityId, status, submittedAt])
+}
+
+model RecognitionResult {
+  id          String            @id @default(cuid())
+  checkinId   String
+  inputText   String
+  sourceType  String            @default("text")
+  resultJson  Json
+  confidence  Float
+  modelName   String            @default("rule-recognizer-v1")
+  status      RecognitionStatus @default(succeeded)
+  createdAt   DateTime          @default(now())
+  checkin     Checkin           @relation(fields: [checkinId], references: [id])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  checkinId String?
+  localPath String
+  mimeType  String
+  sizeBytes Int
+  status    String   @default("active")
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  checkin   Checkin? @relation(fields: [checkinId], references: [id])
+
+  @@index([checkinId, status])
+}
+
+model WeComConfig {
+  id               String       @id @default(cuid())
+  orgId            String
+  botName          String
+  webhookSecretRef String?
+  webhookUrl       String?
+  agentId          String?
+  status           String       @default("mock")
+  createdAt        DateTime     @default(now())
+  organization     Organization @relation(fields: [orgId], references: [id])
+}
+
+model ReminderTask {
+  id           String         @id @default(cuid())
+  activityId   String
+  memberId     String
+  remindDate   DateTime
+  channel      String
+  status       ReminderStatus @default(pending)
+  attemptCount Int            @default(0)
+  lastError    String?
+  createdAt    DateTime       @default(now())
+  activity     Activity       @relation(fields: [activityId], references: [id])
+  member       Member         @relation(fields: [memberId], references: [id])
+
+  @@index([activityId, remindDate, status])
+}
+
+model LeaderboardSnapshot {
+  id          String             @id @default(cuid())
+  activityId  String
+  periodStart DateTime
+  periodEnd   DateTime
+  ruleVersion String             @default("checkin_days_duration_v1")
+  status      String             @default("generated")
+  generatedAt DateTime           @default(now())
+  activity    Activity           @relation(fields: [activityId], references: [id])
+  entries     LeaderboardEntry[]
+
+  @@index([activityId, generatedAt])
+}
+
+model LeaderboardEntry {
+  id              String              @id @default(cuid())
+  snapshotId      String
+  memberId        String
+  rank            Int
+  score           Int
+  checkinDays     Int
+  durationMin     Int
+  calorieEstimate Int
+  snapshot        LeaderboardSnapshot @relation(fields: [snapshotId], references: [id])
+  member          Member              @relation(fields: [memberId], references: [id])
+
+  @@index([snapshotId, rank])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String
+  detailJson Json
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+}
+
+model CoachAdviceLog {
+  id              String   @id @default(cuid())
+  memberId        String?
+  channel         String
+  riskLevel       String
+  riskTags        Json
+  questionHash    String
+  responseSummary String
+  createdAt       DateTime @default(now())
+  member          Member?  @relation(fields: [memberId], references: [id])
+
+  @@index([memberId, createdAt])
+  @@index([riskLevel, createdAt])
+}

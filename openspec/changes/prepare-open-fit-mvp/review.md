@@ -6,6 +6,14 @@ ready with conditions
 
 当前方案已经具备进入实现型 OpenSpec 变更的基础，但正式编码前仍需确认企业微信权限、图片保存策略、排行榜最终规则和健康咨询日志策略。若这些未确认项无法在实现前解决，相关能力必须按设计中的降级路径推进。
 
+针对当前第一阶段目标，允许在以下条件下启动实现：
+
+- 企业微信群机器人 webhook 未配置时，必须启用 mock 模式；配置真实 webhook 后必须能发送测试群消息。
+- 企业微信自建应用 OAuth、userid 和应用消息权限未确认时，不阻塞第一阶段，但必须保留接口边界和 Web 配置骨架。
+- 排行榜最终规则未确认时，不阻塞第一阶段；第一阶段只展示 seed/示例榜单和规则说明占位。
+- 图片策略未确认时，不阻塞第一阶段；第一阶段只创建本地存储目录和鉴权访问占位，不实现真实图片识别。
+- 健康咨询日志策略未确认时，不阻塞第一阶段；第一阶段 AI 教练页面只做占位，不保存咨询原文。
+
 ## Key Findings
 
 - 原 `prepare-open-fit-mvp` 设计深度不足，已升级为 `solution-architecture` 级方案。
@@ -26,10 +34,10 @@ ready with conditions
 
 ## Blocked By
 
-- 自建应用权限未确认：阻塞个人定向提醒和企业微信 OAuth 登录的生产实现。
-- 技术栈未确认：阻塞代码脚手架和目录结构落地。
-- 图片策略未确认：阻塞真实图片上传与识别。
-- 排行榜规则未确认：阻塞生产排行榜口径，但不阻塞测试候选规则实现。
+- 自建应用权限未确认：阻塞个人定向提醒和企业微信 OAuth 登录的生产实现，但不阻塞第一阶段 mock auth 与群机器人测试发送。
+- 图片策略未确认：阻塞真实图片上传与识别，但不阻塞第一阶段本地存储骨架。
+- 排行榜规则未确认：阻塞生产排行榜口径，但不阻塞第一阶段示例榜单和 dashboard 骨架。
+- 健康咨询日志策略未确认：阻塞真实 AI 咨询日志保存，但不阻塞第一阶段 AI 教练占位。
 
 ## Validation Focus
 
@@ -59,9 +67,9 @@ ready with conditions
 
 ## Superpowers Recommendation
 
-writing-plans + test-driven-development + verification-before-completion
+using-git-worktrees + writing-plans + test-driven-development + subagent-driven-development + verification-before-completion
 
-后续实现应先用 `writing-plans` 生成代码级执行计划，再对打卡状态流、排行榜、提醒任务和 AI 安全分类使用 `test-driven-development`，完成前用 `verification-before-completion` 保留测试、日志或截图证据。
+第一阶段实现建议先用 `using-git-worktrees` 隔离脏工作区，再按 `plan.md` 使用 `subagent-driven-development` 或 `executing-plans` 分任务推进。打卡状态流、企业微信发送服务、mock auth 和 API 契约应使用 `test-driven-development`；完成前用 `verification-before-completion` 保留测试、日志或截图证据。
 
 ## Review Request
 

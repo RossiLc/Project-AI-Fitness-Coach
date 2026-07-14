@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: openfit-postgres
+    environment:
+      POSTGRES_DB: openfit
+      POSTGRES_USER: openfit
+      POSTGRES_PASSWORD: openfit
+    ports:
+      - "15432:5432"
+    volumes:
+      - openfit-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfit -d openfit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: openfit-redis
+    ports:
+      - "16380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    image: openfit-api:local
+    container_name: openfit-api
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql://openfit:openfit@postgres:5432/openfit?schema=public
+      REDIS_URL: redis://redis:6379
+      API_PORT: 13100
+    ports:
+      - "13100:13100"
+    volumes:
+      - ../../storage/uploads:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    image: openfit-worker:local
+    container_name: openfit-worker
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql://openfit:openfit@postgres:5432/openfit?schema=public
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ../../storage/uploads:/app/storage/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    image: openfit-web:local
+    container_name: openfit-web
+    ports:
+      - "15173:15173"
+    depends_on:
+      - api
+
+volumes:
+  openfit-postgres-data:
