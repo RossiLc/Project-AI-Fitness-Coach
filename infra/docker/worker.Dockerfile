@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22-alpine AS builder
 
 WORKDIR /workspace
@@ -11,14 +12,16 @@ COPY apps/worker/package.json apps/worker/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 
-RUN corepack enable \
+RUN --mount=type=cache,id=openfit-pnpm-store,target=/root/.local/share/pnpm/store \
+  corepack enable \
   && corepack prepare pnpm@9.15.4 --activate \
   && pnpm install --frozen-lockfile
 
 COPY packages/shared packages/shared
 COPY apps/worker apps/worker
 
-RUN pnpm --filter @openfit/shared build \
+RUN --mount=type=cache,id=openfit-pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm --filter @openfit/shared build \
   && pnpm --filter @openfit/worker build \
   && pnpm --filter @openfit/worker deploy --prod /prod/worker
 

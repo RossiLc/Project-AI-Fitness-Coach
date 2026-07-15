@@ -25,10 +25,7 @@
         </div>
         <button class="ghost" @click="load">刷新</button>
       </div>
-      <div class="kv">
-        <div><dt>今日累计运动时长</dt><dd>{{ summary?.totalDurationMin ?? 0 }} 分钟</dd></div>
-        <div><dt>待处理提醒/异常</dt><dd>{{ summary?.pendingIssueCount ?? 0 }}</dd></div>
-      </div>
+      <p class="muted">当前看板只保留打卡闭环核心指标，后续需要运营分析时再扩展。</p>
       <p v-if="error" class="error">{{ error }}</p>
     </div>
   </section>

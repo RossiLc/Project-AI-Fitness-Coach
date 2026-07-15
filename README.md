@@ -105,6 +105,56 @@ pnpm dev:db:setup
 - `dev:db:seed`：写入本地演示数据。
 - `dev:db:setup`：串行执行以上三步。
 
+## Docker 数据清理
+
+Docker 环境里的 PostgreSQL 使用 named volume `openfit-postgres-data` 保存数据。`pnpm docker:down` 只会停止并删除容器，不会删除这个 volume，所以再次 `pnpm docker:up` 时历史数据会被恢复。
+
+常用停止和启动：
+
+```powershell
+pnpm docker:down
+pnpm docker:up
+```
+
+需要重新构建镜像时单独执行：
+
+```powershell
+pnpm docker:build
+pnpm docker:up
+```
+
+如果希望构建并启动合并执行：
+
+```powershell
+pnpm docker:up:build
+```
+
+需要停止后重新启动：
+
+```powershell
+pnpm docker:restart
+```
+
+需要清空历史数据和内置演示数据时，使用：
+
+```powershell
+pnpm docker:reset
+pnpm docker:up
+```
+
+`pnpm docker:reset` 会执行 `docker compose down -v`，会删除数据库 volume；本地上传文件目录 `storage/uploads` 是宿主机目录挂载，不会被这个命令删除。
+
+`pnpm docker:up` 重新启动 API 容器时，会先执行数据库 bootstrap：同步 Prisma schema 创建表结构，并写入幂等基础组织、活动和企业微信配置数据，然后才启动 API 服务。因此 reset 后不需要手动执行 `pnpm dev:db:setup`。bootstrap 不写入 `员工小李`、`活动管理员王姐`、`企业管理员老周` 这类演示成员；成员列表只来自企业微信消息自动建档或通讯录同步。
+
+如果遇到 `The table public.ActivityRule does not exist in the current database`，说明当前运行的 API 仍是旧代码或旧 Docker 镜像，旧代码会查询已经取消使用的 `ActivityRule` 表。处理方式：
+
+```powershell
+pnpm docker:down
+pnpm docker:up
+```
+
+如果旧镜像没有更新，先执行 `pnpm docker:build` 再执行 `pnpm docker:up`。当前活动配置不再依赖 `ActivityRule` 表，活动名称和活动内容统一保存在 `Activity.ruleJson` 中。
+
 生产环境不使用 `prisma db push`。生产数据库结构应通过迁移任务升级，例如 `prisma migrate deploy`；内置基础数据应通过幂等 bootstrap/seed 任务写入，并作为部署流水线的一部分执行。涉及字段替换或状态变更时，应按兼容发布处理：先加新结构并兼容读写，再迁移数据，最后移除旧结构。
 
 ### 企业微信 AI 健身教练

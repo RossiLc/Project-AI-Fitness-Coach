@@ -1,6 +1,11 @@
-import { PrismaClient } from "@prisma/client";
+import { spawnSync } from "node:child_process";
 
-const prisma = new PrismaClient();
+function runPrismaCommand(args) {
+  const result = spawnSync("node", ["node_modules/prisma/build/index.js", ...args], { stdio: "inherit" });
+  if (result.status !== 0) {
+    throw new Error(`prisma ${args.join(" ")} failed with exit code ${result.status ?? "unknown"}`);
+  }
+}
 
 const defaultActivityContent = [
   "活动名称：夏季 21 天运动打卡",
@@ -10,7 +15,11 @@ const defaultActivityContent = [
   "隐私边界：群内提醒不公开未打卡成员名单，不展示原始图片和健康咨询原文。"
 ].join("\n");
 
-async function main() {
+function runPrismaDbPush() {
+  runPrismaCommand(["db", "push", "--schema", "prisma/schema.prisma", "--accept-data-loss", "--skip-generate"]);
+}
+
+async function seedBaseData(prisma) {
   const org = await prisma.organization.upsert({
     where: { id: "org_demo" },
     update: {},
@@ -57,10 +66,17 @@ async function main() {
 
 }
 
-main()
-  .then(async () => prisma.$disconnect())
-  .catch(async (error) => {
-    console.error(error);
+try {
+  runPrismaDbPush();
+  const { PrismaClient } = await import("@prisma/client");
+  const prisma = new PrismaClient();
+  try {
+    await seedBaseData(prisma);
+  } finally {
     await prisma.$disconnect();
-    process.exit(1);
-  });
+  }
+  console.log("[database-bootstrap] schema and base data are ready");
+} catch (error) {
+  console.error("[database-bootstrap] failed", error);
+  process.exitCode = 1;
+}

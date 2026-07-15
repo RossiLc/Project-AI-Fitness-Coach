@@ -9,6 +9,7 @@ export interface WeComStreamBotClient {
   connect(): unknown;
   disconnect(): unknown;
   replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>;
+  downloadFile(url: string, aesKey?: string): Promise<{ buffer: Buffer; filename?: string }>;
 }
 
 export type WeComStreamBotClientFactory = (options: WSClientOptions) => WeComStreamBotClient;
@@ -77,24 +78,26 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
     client.on("authenticated", () => this.logger.log(`企业微信智能机器人长连接认证成功：${role}`) as never);
     client.on("disconnected", (reason: unknown) => this.logger.warn(`企业微信智能机器人长连接断开：${role} ${String(reason)}`));
     client.on("error", (error: unknown) => this.logger.error(`企业微信智能机器人长连接错误：${role}`, error instanceof Error ? error.stack : String(error)));
-    client.on("message.text", (frame: unknown) => {
-      void this.handleFrame(client, frame as WsFrame<TextMessage>, role, "text");
-    });
-    client.on("message.image", (frame: unknown) => {
-      void this.handleFrame(client, frame as WsFrame<ImageMessage>, role, "image");
-    });
-    client.on("message.mixed", (frame: unknown) => {
-      void this.handleFrame(client, frame as WsFrame<MixedMessage>, role, "mixed");
-    });
+    client.on("message.text", (frame: unknown) => this.handleFrameSafely(client, frame as WsFrame<TextMessage>, role, "text"));
+    client.on("message.image", (frame: unknown) => this.handleFrameSafely(client, frame as WsFrame<ImageMessage>, role, "image"));
+    client.on("message.mixed", (frame: unknown) => this.handleFrameSafely(client, frame as WsFrame<MixedMessage>, role, "mixed"));
+  }
+
+  private async handleFrameSafely(client: WeComStreamBotClient, frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, role: WeComBotRole, messageType: "text" | "image" | "mixed"): Promise<void> {
+    try {
+      await this.handleFrame(client, frame, role, messageType);
+    } catch (error) {
+      this.logger.error(`企业微信智能机器人消息处理失败：${error instanceof Error ? error.stack : String(error)}`);
+    }
   }
 
   private async handleFrame(client: WeComStreamBotClient, frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, role: WeComBotRole, messageType: "text" | "image" | "mixed"): Promise<void> {
-    const event = this.toEventRequest(frame, role, messageType);
+    const event = await this.toEventRequest(client, frame, role, messageType);
     const response = await this.bot.handleEvent(event);
     await client.replyStream(frame, generateReqId("openfit"), response.text, true);
   }
 
-  private toEventRequest(frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, role: WeComBotRole, messageType: "text" | "image" | "mixed"): WeComBotEventRequest {
+  private async toEventRequest(client: WeComStreamBotClient, frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, role: WeComBotRole, messageType: "text" | "image" | "mixed"): Promise<WeComBotEventRequest> {
     const body = frame.body;
     return {
       messageId: body?.msgid ?? frame.headers?.req_id ?? generateReqId("openfit-msg"),
@@ -103,7 +106,7 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
       botId: body?.aibotid,
       botRole: role,
       messageType,
-      attachments: this.extractAttachments(frame, messageType),
+      attachments: await this.extractAttachments(client, frame, messageType),
       chatId: body?.chatid
     };
   }
@@ -121,29 +124,38 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
     return "";
   }
 
-  private extractAttachments(frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, messageType: "text" | "image" | "mixed"): WeComBotAttachment[] {
+  private async extractAttachments(client: WeComStreamBotClient, frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, messageType: "text" | "image" | "mixed"): Promise<WeComBotAttachment[]> {
     if (messageType === "image") {
       const image = (frame.body as ImageMessage | undefined)?.image;
-      return image ? [this.toImageAttachment(image)] : [];
+      return image ? [await this.toImageAttachment(client, image)] : [];
     }
     if (messageType === "mixed") {
-      return (
-        (frame.body as MixedMessage | undefined)?.mixed?.msg_item
-          ?.filter((item) => item.msgtype === "image" && item.image)
-          .map((item) => this.toImageAttachment(item.image!)) ?? []
-      );
+      const images = (frame.body as MixedMessage | undefined)?.mixed?.msg_item?.filter((item) => item.msgtype === "image" && item.image).map((item) => item.image!) ?? [];
+      return Promise.all(images.map((image) => this.toImageAttachment(client, image)));
     }
     return [];
   }
 
-  private toImageAttachment(image: { url: string; aeskey?: string; filename?: string }): WeComBotAttachment {
+  private async toImageAttachment(client: WeComStreamBotClient, image: { url: string; aeskey?: string; filename?: string }): Promise<WeComBotAttachment> {
+    const downloaded = await this.downloadImage(client, image);
     return {
       kind: "image",
       url: image.url,
       fileId: image.aeskey,
-      filename: image.filename,
-      mimeType: "image/jpeg"
+      filename: downloaded?.filename ?? image.filename,
+      mimeType: "image/jpeg",
+      base64Data: downloaded?.buffer.toString("base64"),
+      sizeBytes: downloaded?.buffer.byteLength
     };
+  }
+
+  private async downloadImage(client: WeComStreamBotClient, image: { url: string; aeskey?: string; filename?: string }): Promise<{ buffer: Buffer; filename?: string } | null> {
+    try {
+      return await client.downloadFile(image.url, image.aeskey);
+    } catch (error) {
+      this.logger.warn(`企业微信图片下载解密失败：${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   private createSdkLogger(role: WeComBotRole) {

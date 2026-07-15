@@ -8,7 +8,7 @@ export class DashboardController {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   @Get("summary")
-  @UseGuards(AllowRoles(MemberRole.ActivityAdmin, MemberRole.OrgAdmin))
+  @UseGuards(AllowRoles(MemberRole.OrgAdmin))
   async getSummary(): Promise<DashboardSummary> {
     const activeActivity = await this.prisma.activity.findFirst({ where: { status: "active" } });
     if (!activeActivity) {

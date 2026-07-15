@@ -37,13 +37,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { RouterLink, RouterView } from "vue-router";
-import { MemberRole, type CurrentUser } from "@openfit/shared";
-import { getMe, setApiRole } from "../api/client";
+import type { CurrentUser } from "@openfit/shared";
+import { getMe } from "../api/client";
 
 const me = ref<CurrentUser | null>(null);
 
 onMounted(async () => {
-  setApiRole(MemberRole.ActivityAdmin);
   me.value = await getMe().catch(() => null);
 });
 </script>

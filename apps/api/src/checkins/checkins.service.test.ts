@@ -115,4 +115,58 @@ describe("CheckinsService", () => {
     expect(submitted.durationMin).toBe(40);
     expect(submitted.distanceKm).toBe(4);
   });
+
+  it("根据 AI 识别结果直接创建企业微信已提交打卡", async () => {
+    const createdRows: unknown[] = [];
+    const prisma = {
+      activity: {
+        findFirst: async () => ({ id: "act_demo", status: "active" })
+      },
+      checkin: {
+        create: async (args: unknown) => {
+          createdRows.push(args);
+          return { id: "chk_auto", ...(args as { data: Record<string, unknown> }).data };
+        }
+      }
+    };
+    const service = new CheckinsService(prisma as never, new RuleRecognizerService());
+
+    const result = await service.createSubmittedFromRecognition(user, {
+      activityId: "act_demo",
+      sourceType: "wecom_mixed",
+      inputText: "打卡 跑步30分钟",
+      modelName: "ai-image-checkin-parser",
+      recognition: {
+        sportType: "running",
+        durationMin: 30,
+        intensity: "moderate",
+        calorieEstimate: 255,
+        confidence: 0.82,
+        notice: "AI 已识别"
+      }
+    });
+
+    expect(result.id).toBe("chk_auto");
+    expect(result.status).toBe(CheckinStatus.Submitted);
+    expect(result.submittedAt).toBeInstanceOf(Date);
+    expect(createdRows[0]).toMatchObject({
+      data: {
+        activityId: "act_demo",
+        memberId: "employee_demo",
+        status: CheckinStatus.Submitted,
+        sourceType: "wecom_mixed",
+        sportType: "running",
+        durationMin: 30,
+        calorieEstimate: 255,
+        recognitions: {
+          create: {
+            inputText: "打卡 跑步30分钟",
+            sourceType: "wecom_mixed",
+            confidence: 0.82,
+            modelName: "ai-image-checkin-parser"
+          }
+        }
+      }
+    });
+  });
 });

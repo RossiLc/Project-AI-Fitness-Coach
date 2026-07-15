@@ -1,23 +1,26 @@
 import { MemberRole, type CurrentUser } from "@openfit/shared";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const ADMIN_ROLE = MemberRole.OrgAdmin;
 
-let currentRole: MemberRole = MemberRole.Employee;
-
-export function setApiRole(role: MemberRole) {
-  currentRole = role;
+export function setApiRole(_role: MemberRole) {
+  // 兼容旧调用；当前 Web 工作台固定为单管理员视角。
 }
 
 export function getApiRole() {
-  return currentRole;
+  return ADMIN_ROLE;
+}
+
+export function buildApiUrl(path: string) {
+  return `${API_BASE}${path}`;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-openfit-role": currentRole,
+      "x-openfit-role": ADMIN_ROLE,
       ...(init?.headers ?? {})
     }
   });

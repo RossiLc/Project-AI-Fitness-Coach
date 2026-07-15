@@ -36,6 +36,15 @@ type CheckinHistoryRow = {
   calorieEstimate: number | null;
   submittedAt: Date | null;
   createdAt: Date;
+  attachments?: Array<{
+    id: string;
+    checkinId: string | null;
+    localPath: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+    createdAt: Date;
+  }>;
 };
 
 interface ListMembersOptions {
@@ -79,7 +88,7 @@ export class MembersService {
 
     const checkins = await this.prisma.checkin.findMany({
       where: { memberId },
-      include: { member: true },
+      include: { member: true, attachments: { where: { status: "active" }, orderBy: { createdAt: "asc" } } },
       orderBy: { createdAt: "desc" },
       take: 100
     });
@@ -196,7 +205,16 @@ function toAdminCheckinDto(row: CheckinHistoryRow): AdminCheckinDto {
     intensity: row.intensity ?? undefined,
     calorieEstimate: row.calorieEstimate ?? undefined,
     submittedAt: row.submittedAt?.toISOString(),
-    createdAt: row.createdAt.toISOString()
+    createdAt: row.createdAt.toISOString(),
+    attachments: row.attachments?.map((attachment) => ({
+      id: attachment.id,
+      checkinId: attachment.checkinId ?? undefined,
+      localPath: attachment.localPath,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      status: attachment.status as "active" | "deleted",
+      createdAt: attachment.createdAt.toISOString()
+    }))
   };
 }
 

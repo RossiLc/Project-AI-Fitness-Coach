@@ -11,7 +11,7 @@ class FakeWeComBotService {
     return {
       replyType: "markdown",
       intent: BotIntent.CheckinRecord,
-      text: "已生成待确认打卡。"
+      text: "打卡成功。"
     };
   }
 }
@@ -27,7 +27,8 @@ function createClient() {
       }),
       connect: vi.fn(),
       disconnect: vi.fn(),
-      replyStream: vi.fn()
+      replyStream: vi.fn(),
+      downloadFile: vi.fn(async () => ({ buffer: Buffer.from("wecom-image"), filename: "downloaded.jpg" }))
     } satisfies WeComStreamBotClient
   };
 }
@@ -88,7 +89,7 @@ describe("WeComStreamBotService", () => {
       messageType: "text",
       chatId: "chat-1"
     });
-    expect(client.replyStream).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^openfit[_-]/), "已生成待确认打卡。", true);
+    expect(client.replyStream).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^openfit[_-]/), "打卡成功。", true);
   });
 
   it("将 SDK 图片消息归一化为图片附件", async () => {
@@ -118,10 +119,13 @@ describe("WeComStreamBotService", () => {
           kind: "image",
           url: "https://example.test/image",
           fileId: "aes-key",
-          filename: "photo.jpg"
+          filename: "downloaded.jpg",
+          base64Data: Buffer.from("wecom-image").toString("base64"),
+          sizeBytes: Buffer.byteLength("wecom-image")
         }
       ]
     });
+    expect(client.downloadFile).toHaveBeenCalledWith("https://example.test/image", "aes-key");
   });
 
   it("test 或 mock 模式不会建立长连接", async () => {

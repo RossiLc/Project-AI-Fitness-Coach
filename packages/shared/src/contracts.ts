@@ -82,6 +82,7 @@ export interface DashboardSummary {
 export interface ActivityConfigDto {
   id: string;
   name: string;
+  content: string;
   status: string;
   startAt: string;
   endAt: string;
@@ -93,10 +94,16 @@ export interface ActivityConfigDto {
 
 export interface UpdateActivityConfigRequest {
   name: string;
-  reminderTime: string;
-  rankingPrimary: "checkin_days";
-  rankingSecondary: "duration_min";
-  makeupWindowDays: number;
+  content: string;
+  startAt: string;
+  endAt: string;
+}
+
+export interface CreateActivityConfigRequest {
+  name: string;
+  content: string;
+  startAt: string;
+  endAt: string;
 }
 
 export interface ReminderTaskDto {
@@ -120,13 +127,17 @@ export interface LeaderboardEntryDto {
 
 export interface LeaderboardDto {
   status: "computed" | "empty";
+  category: LeaderboardCategory;
   rule: string;
   generatedAt: string;
   entries: LeaderboardEntryDto[];
 }
 
+export type LeaderboardCategory = "checkin_days" | "duration_min" | "calorie_estimate";
+
 export interface AdminCheckinDto extends CheckinRecordDto {
   memberName: string;
+  attachments?: AttachmentDto[];
 }
 
 export interface InvalidateCheckinRequest {

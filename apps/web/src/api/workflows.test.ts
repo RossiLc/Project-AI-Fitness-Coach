@@ -1,23 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CheckinStatus, MemberRole } from "@openfit/shared";
-import { setApiRole } from "./client";
 import { recognizeCheckin, submitCheckin } from "./checkins";
 import { askCoach } from "./coach";
 import { bindMemberWeComUserid, getMembers, getWeComAppStatus, getWeComOAuthLoginUrl, sendWeComAppMessage, sendWeComTestMessage, syncWeComMembers } from "./wecom";
 import { getLeaderboard, rebuildLeaderboard } from "./leaderboards";
-import { getAdminCheckins, invalidateCheckin, retryReminderTask, scanReminderTasks } from "./admin";
+import { createActivityConfig, getAdminCheckins, invalidateCheckin, retryReminderTask, scanReminderTasks } from "./admin";
 
 describe("web 工作流 API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    setApiRole(MemberRole.Employee);
   });
 
   it("今日打卡识别和确认提交使用正确接口", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/api/checkins/recognize")) {
         expect(init?.method).toBe("POST");
-        expect(init?.headers).toMatchObject({ "x-openfit-role": MemberRole.Employee });
+        expect(init?.headers).toMatchObject({ "x-openfit-role": MemberRole.OrgAdmin });
         return response({
           checkinId: "chk_demo",
           status: CheckinStatus.Recognized,
@@ -47,8 +45,7 @@ describe("web 工作流 API", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("企业微信测试发送使用企业管理员角色请求头", async () => {
-    setApiRole(MemberRole.OrgAdmin);
+  it("企业微信测试发送使用单管理员请求头", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url: string, init?: RequestInit) => {
@@ -64,7 +61,6 @@ describe("web 工作流 API", () => {
   });
 
   it("企业微信自建应用和成员映射接口可从 Web 调用", async () => {
-    setApiRole(MemberRole.OrgAdmin);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/api/admin/wecom/app/status")) {
         return response({ mode: "mock", corpIdConfigured: true, agentIdConfigured: true, secretConfigured: false, oauthReady: true, appMessageReady: false, memberSyncReady: false });
@@ -120,15 +116,14 @@ describe("web 工作流 API", () => {
   });
 
   it("排行榜读取和重算使用真实接口", async () => {
-    setApiRole(MemberRole.ActivityAdmin);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.endsWith("/api/leaderboards/current")) {
-        return response({ status: "computed", rule: "按有效打卡天数", generatedAt: new Date().toISOString(), entries: [] });
+      if (url.endsWith("/api/leaderboards/current?category=checkin_days")) {
+        return response({ status: "computed", category: "checkin_days", rule: "按有效打卡天数", generatedAt: new Date().toISOString(), entries: [] });
       }
-      if (url.endsWith("/api/leaderboards/rebuild")) {
+      if (url.endsWith("/api/leaderboards/rebuild?category=checkin_days")) {
         expect(init?.method).toBe("POST");
-        expect(init?.headers).toMatchObject({ "x-openfit-role": MemberRole.ActivityAdmin });
-        return response({ status: "computed", rule: "按有效打卡天数", generatedAt: new Date().toISOString(), entries: [] });
+        expect(init?.headers).toMatchObject({ "x-openfit-role": MemberRole.OrgAdmin });
+        return response({ status: "computed", category: "checkin_days", rule: "按有效打卡天数", generatedAt: new Date().toISOString(), entries: [] });
       }
       throw new Error(`unexpected url: ${url}`);
     });
@@ -141,7 +136,6 @@ describe("web 工作流 API", () => {
   });
 
   it("管理员打卡作废和提醒扫描使用管理接口", async () => {
-    setApiRole(MemberRole.ActivityAdmin);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/api/admin/checkins")) {
         return response([]);
@@ -169,6 +163,43 @@ describe("web 工作流 API", () => {
     await retryReminderTask("rem_1");
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("新增活动配置使用 POST 接口", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe("/api/activities/configs");
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toMatchObject({ "x-openfit-role": MemberRole.OrgAdmin });
+        expect(init?.body).toBe(
+          JSON.stringify({
+            name: "九月运动打卡",
+            content: "每天提交运动内容和图片。",
+            startAt: "2026-09-01",
+            endAt: "2026-09-30"
+          })
+        );
+        return response({
+          id: "act_new",
+          name: "九月运动打卡",
+          content: "每天提交运动内容和图片。",
+          status: "draft",
+          startAt: new Date().toISOString(),
+          endAt: new Date().toISOString(),
+          reminderTime: "20:00"
+        });
+      })
+    );
+
+    const result = await createActivityConfig({
+      name: "九月运动打卡",
+      content: "每天提交运动内容和图片。",
+      startAt: "2026-09-01",
+      endAt: "2026-09-30"
+    });
+
+    expect(result.id).toBe("act_new");
   });
 });
 

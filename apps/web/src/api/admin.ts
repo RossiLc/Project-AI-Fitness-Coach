@@ -2,6 +2,7 @@ import type {
   ActivityConfigDto,
   AdminCheckinDto,
   CheckinRecordDto,
+  CreateActivityConfigRequest,
   DashboardSummary,
   GroupMissingCheckinReminderResult,
   MemberCheckinHistoryDto,
@@ -10,6 +11,7 @@ import type {
   UpdateActivityConfigRequest
 } from "@openfit/shared";
 import { apiFetch } from "./client";
+import { buildApiUrl } from "./client";
 
 export function getDashboardSummary() {
   return apiFetch<DashboardSummary>("/api/admin/dashboard/summary");
@@ -56,6 +58,10 @@ export function getMemberCheckins(id: string) {
   return apiFetch<MemberCheckinHistoryDto>(`/api/admin/members/${id}/checkins`);
 }
 
+export function getAttachmentPreviewUrl(id: string) {
+  return buildApiUrl(`/api/files/${encodeURIComponent(id)}/content`);
+}
+
 export function getAdminCheckins() {
   return apiFetch<AdminCheckinDto[]>("/api/admin/checkins");
 }
@@ -76,6 +82,17 @@ export function restoreCheckin(id: string) {
 
 export function getActivityConfig() {
   return apiFetch<ActivityConfigDto | null>("/api/activities/current/config");
+}
+
+export function getActivityConfigs() {
+  return apiFetch<ActivityConfigDto[]>("/api/activities/configs");
+}
+
+export function createActivityConfig(body: CreateActivityConfigRequest) {
+  return apiFetch<ActivityConfigDto>("/api/activities/configs", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
 }
 
 export function updateActivityConfig(id: string, body: UpdateActivityConfigRequest) {

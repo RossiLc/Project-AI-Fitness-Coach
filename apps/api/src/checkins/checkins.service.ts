@@ -6,6 +6,14 @@ import { AiCheckinParserService } from "../ai/ai-checkin-parser.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { RuleRecognizerService } from "./rule-recognizer.service.js";
 
+interface CreateSubmittedFromRecognitionInput {
+  activityId: string;
+  sourceType: string;
+  inputText: string;
+  recognition: RecognitionResultDto;
+  modelName?: string;
+}
+
 @Injectable()
 export class CheckinsService {
   constructor(
@@ -74,6 +82,35 @@ export class CheckinsService {
       status: CheckinStatus.Recognized,
       recognition
     };
+  }
+
+  async createSubmittedFromRecognition(user: CurrentUser, input: CreateSubmittedFromRecognitionInput) {
+    const activity = await this.prisma.activity.findFirst({ where: { id: input.activityId, status: "active" } });
+    if (!activity) throw new ApiException(ApiErrorCode.ActivityNotActive, "当前活动不可用");
+
+    return this.prisma.checkin.create({
+      data: {
+        activityId: input.activityId,
+        memberId: user.id,
+        status: CheckinStatus.Submitted,
+        sourceType: input.sourceType,
+        sportType: input.recognition.sportType,
+        durationMin: input.recognition.durationMin,
+        distanceKm: input.recognition.distanceKm,
+        intensity: input.recognition.intensity,
+        calorieEstimate: input.recognition.calorieEstimate,
+        submittedAt: new Date(),
+        recognitions: {
+          create: {
+            inputText: input.inputText,
+            sourceType: input.sourceType,
+            resultJson: input.recognition as unknown as Prisma.InputJsonValue,
+            confidence: input.recognition.confidence,
+            modelName: input.modelName ?? "ai-checkin-parser"
+          }
+        }
+      }
+    });
   }
 
   async submit(user: CurrentUser, id: string, body: SubmitCheckinRequest) {

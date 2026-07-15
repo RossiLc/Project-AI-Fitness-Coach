@@ -5,7 +5,7 @@ import { AllowRoles } from "../auth/role-guard.factory.js";
 import { AdminCheckinsService } from "./admin-checkins.service.js";
 
 @Controller("admin/checkins")
-@UseGuards(AllowRoles(MemberRole.ActivityAdmin, MemberRole.OrgAdmin))
+@UseGuards(AllowRoles(MemberRole.OrgAdmin))
 export class AdminCheckinsController {
   constructor(@Inject(AdminCheckinsService) private readonly adminCheckins: AdminCheckinsService) {}
 

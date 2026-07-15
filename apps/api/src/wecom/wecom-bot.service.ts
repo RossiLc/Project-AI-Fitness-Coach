@@ -1,12 +1,20 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import { BotIntent, MemberRole, type CurrentUser, type WeComBotAttachment, type WeComBotEventRequest, type WeComBotEventResponse, type WeComBotRole } from "@openfit/shared";
+import { mkdir, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { BotIntent, MemberRole, type CurrentUser, type RecognitionResultDto, type WeComBotAttachment, type WeComBotEventRequest, type WeComBotEventResponse, type WeComBotRole } from "@openfit/shared";
 import { AiCheckinParserService } from "../ai/ai-checkin-parser.service.js";
 import { AiProviderService } from "../ai/ai-provider.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { BotIntentRouterService } from "./bot-intent-router.service.js";
 import { CoachSafetyService } from "./coach-safety.service.js";
+
+function readActivityContent(ruleJson: unknown): string {
+  if (!ruleJson || typeof ruleJson !== "object" || Array.isArray(ruleJson)) return "";
+  const content = (ruleJson as Record<string, unknown>).content;
+  return typeof content === "string" ? content.trim() : "";
+}
 
 @Injectable()
 export class WeComBotService {
@@ -30,7 +38,7 @@ export class WeComBotService {
 
     const role = this.resolveBotRole(body);
     if (role === "checkin") return this.remember(body.messageId, await this.handleCheckinBotEvent(user, body));
-    if (role === "coach") return this.remember(body.messageId, await this.handleCoachBotEvent(body.text));
+    if (role === "coach") return this.remember(body.messageId, await this.handleCoachBotEvent(user, body.text));
 
     const intent = this.router.detect(body.text);
     if (intent === BotIntent.CheckinRecord) return this.remember(body.messageId, await this.handleCheckinRecord(user, body.text, body.attachments));
@@ -60,14 +68,27 @@ export class WeComBotService {
     return this.handleCheckinRecord(user, body.text, attachments);
   }
 
-  private async handleCoachBotEvent(text: string): Promise<WeComBotEventResponse> {
+  private async handleCoachBotEvent(user: CurrentUser, text: string): Promise<WeComBotEventResponse> {
     const safety = this.coachSafety.buildReply(text);
     if (safety.riskLevel === "escalate") return this.text(BotIntent.CoachAdvice, safety.text);
 
     const intent = this.router.detect(text);
-    if (intent === BotIntent.ActivityQuery) return this.text(intent, "当前活动：夏季 21 天运动打卡。打卡请使用 Open Fit 打卡助手；这里可以查询规则、榜单和训练建议。");
+    if (intent === BotIntent.ActivityQuery) return this.handleActivityQuery(user);
     if (intent === BotIntent.LeaderboardQuery) return this.text(intent, "排行榜查询已收到。群内只展示必要排名信息，不公开图片、健康咨询原文或未打卡名单。");
     return this.handleCoachAdvice(text);
+  }
+
+  private async handleActivityQuery(user: CurrentUser): Promise<WeComBotEventResponse> {
+    const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active" }, orderBy: { startAt: "desc" } });
+    if (!activity) return this.text(BotIntent.ActivityQuery, "当前没有进行中的活动。");
+
+    const content = readActivityContent(activity.ruleJson);
+
+    if (!content) {
+      return this.text(BotIntent.ActivityQuery, `当前活动：${activity.name}。活动内容尚未配置，请联系管理员在 Web 工作台补充活动内容。`);
+    }
+
+    return this.text(BotIntent.ActivityQuery, [`当前活动：${activity.name}`, "活动内容：", content].join("\n"));
   }
 
   private hasImageOnly(body: WeComBotEventRequest): boolean {
@@ -102,14 +123,15 @@ export class WeComBotService {
   private async provisionWeComMember(wecomUserid: string) {
     const orgId = process.env.WECOM_DEFAULT_ORG_ID || (await this.prisma.organization.findFirst({ orderBy: { createdAt: "asc" } }))?.id;
     if (!orgId) return null;
+    const profile = await this.fetchWeComUserProfile(wecomUserid).catch(() => null);
 
     try {
       return await this.prisma.member.create({
         data: {
           id: `wecom_${createHash("sha1").update(wecomUserid).digest("hex").slice(0, 16)}`,
           orgId,
-          displayName: `企业微信用户 ${wecomUserid.slice(-6)}`,
-          department: "企业微信",
+          displayName: profile?.displayName ?? `企业微信用户 ${wecomUserid.slice(-6)}`,
+          department: profile?.department ?? "企业微信",
           role: MemberRole.Employee,
           status: "active",
           wecomUserid,
@@ -121,19 +143,42 @@ export class WeComBotService {
     }
   }
 
+  private async fetchWeComUserProfile(wecomUserid: string): Promise<{ displayName: string; department?: string } | null> {
+    const corpId = process.env.WECOM_CORP_ID;
+    const secret = process.env.WECOM_APP_SECRET;
+    if (!corpId || !secret) return null;
+
+    const tokenResponse = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${encodeURIComponent(corpId)}&corpsecret=${encodeURIComponent(secret)}`);
+    const tokenPayload = (await tokenResponse.json()) as { errcode?: number; access_token?: string };
+    if (!tokenResponse.ok || tokenPayload.errcode !== 0 || !tokenPayload.access_token) return null;
+
+    const userResponse = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=${encodeURIComponent(tokenPayload.access_token)}&userid=${encodeURIComponent(wecomUserid)}`);
+    const userPayload = (await userResponse.json()) as { errcode?: number; name?: string; department?: number[] };
+    if (!userResponse.ok || userPayload.errcode !== 0 || !userPayload.name) return null;
+
+    return {
+      displayName: userPayload.name,
+      department: userPayload.department?.join(",")
+    };
+  }
+
   private async handleCheckinRecord(user: CurrentUser, text: string, attachments: WeComBotAttachment[] = []): Promise<WeComBotEventResponse> {
     const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active" }, orderBy: { startAt: "desc" } });
     if (!activity) return this.text(BotIntent.CheckinRecord, "当前没有进行中的活动，暂时无法打卡。");
 
-    const result = await this.checkins.recognize(user, activity.id, text);
-    if (attachments.length > 0) await this.saveInboundAttachments(result.checkinId, user.orgId, activity.id, attachments);
-    const recognition = result.recognition;
-    return {
-      replyType: "markdown",
-      intent: BotIntent.CheckinRecord,
-      checkinId: result.checkinId,
-      text: `已生成待确认打卡：${recognition.sportType}，${recognition.durationMin} 分钟${recognition.distanceKm ? `，${recognition.distanceKm} 公里` : ""}${attachments.length > 0 ? "，已关联图片附件" : ""}。回复“确认”提交，或到 Web 工作台修正后提交。`
-    };
+    const recognition = this.normalizeCheckinRecognition(await this.aiParser.parseImage({ textHint: text, attachments }));
+    const validation = this.validateAutoCheckinRecognition(recognition, attachments.length > 0);
+    if (!validation.ok) return this.text(BotIntent.CheckinRecord, validation.text);
+
+    const checkin = await this.checkins.createSubmittedFromRecognition(user, {
+      activityId: activity.id,
+      sourceType: "wecom_mixed",
+      inputText: text || "企业微信图文打卡",
+      recognition,
+      modelName: "ai-image-checkin-parser"
+    });
+    await this.saveInboundAttachments(checkin.id, user.orgId, activity.id, attachments);
+    return this.buildAutoSubmittedResponse(checkin.id, recognition, attachments.length);
   }
 
   private async handleImageOnlyCheckin(user: CurrentUser, body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
@@ -141,14 +186,62 @@ export class WeComBotService {
     if (!activity) return this.text(BotIntent.CheckinRecord, "当前没有进行中的活动，暂时无法打卡。");
 
     const attachments = body.attachments ?? [];
-    const recognition = await this.aiParser.parseImage({ textHint: body.text, attachments });
-    const result = await this.checkins.recognizeFromImage(user, activity.id, recognition, "企业微信图片打卡");
-    await this.saveInboundAttachments(result.checkinId, user.orgId, activity.id, attachments);
+    const recognition = this.normalizeCheckinRecognition(await this.aiParser.parseImage({ textHint: body.text, attachments }));
+    const validation = this.validateAutoCheckinRecognition(recognition, attachments.length > 0);
+    if (!validation.ok) return this.text(BotIntent.CheckinRecord, validation.text);
+
+    const checkin = await this.checkins.createSubmittedFromRecognition(user, {
+      activityId: activity.id,
+      sourceType: "wecom_image",
+      inputText: body.text || "企业微信图片打卡",
+      recognition,
+      modelName: "ai-image-checkin-parser"
+    });
+    await this.saveInboundAttachments(checkin.id, user.orgId, activity.id, attachments);
+    return this.buildAutoSubmittedResponse(checkin.id, recognition, attachments.length);
+  }
+
+  private validateAutoCheckinRecognition(recognition: RecognitionResultDto, hasImage: boolean): { ok: true } | { ok: false; text: string } {
+    if (!hasImage) return { ok: false, text: "打卡需要附上运动图片凭证，请补充打卡图片后重新发送。" };
+
+    const missing: string[] = [];
+    if (!recognition.sportType?.trim()) missing.push("运动类型");
+    if (!Number.isFinite(recognition.durationMin) || recognition.durationMin <= 0) missing.push("运动时长");
+
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        text: `这次打卡还缺少${missing.join("、")}，请补充后重新发送。例如：跑步 30 分钟，并附上打卡图片。`
+      };
+    }
+
+    return { ok: true };
+  }
+
+  private normalizeCheckinRecognition(recognition: RecognitionResultDto): RecognitionResultDto {
+    const sportType = recognition.sportType?.trim() || "";
+    const durationMin = Number(recognition.durationMin);
+    return {
+      ...recognition,
+      sportType,
+      durationMin,
+      calorieEstimate: recognition.calorieEstimate ?? (sportType && durationMin > 0 ? this.estimateCalories(sportType, durationMin, recognition.intensity) : undefined)
+    };
+  }
+
+  private estimateCalories(sportType: string, durationMin: number, intensity: RecognitionResultDto["intensity"]): number {
+    const normalized = sportType.toLowerCase();
+    const base = normalized.includes("run") || sportType.includes("跑") ? 8.5 : normalized.includes("cycl") || sportType.includes("骑") ? 6.5 : normalized.includes("walk") || sportType.includes("走") ? 4.8 : 5.5;
+    const factor = intensity === "high" ? 1.2 : intensity === "low" ? 0.82 : 1;
+    return Math.max(1, Math.round(durationMin * base * factor));
+  }
+
+  private buildAutoSubmittedResponse(checkinId: string, recognition: RecognitionResultDto, attachmentCount: number): WeComBotEventResponse {
     return {
       replyType: "markdown",
       intent: BotIntent.CheckinRecord,
-      checkinId: result.checkinId,
-      text: `AI 图片识别已生成待确认打卡：${recognition.sportType}，${recognition.durationMin} 分钟${recognition.distanceKm ? `，${recognition.distanceKm} 公里` : ""}。回复“确认”提交，识别不准请补充文字后重新打卡。`
+      checkinId,
+      text: `打卡成功：${recognition.sportType}，${recognition.durationMin} 分钟，约消耗 ${recognition.calorieEstimate ?? 0} 千卡${recognition.distanceKm ? `，距离 ${recognition.distanceKm} 公里` : ""}，已关联 ${attachmentCount} 张图片。`
     };
   }
 
@@ -156,23 +249,59 @@ export class WeComBotService {
     await Promise.all(
       attachments
         .filter((attachment) => attachment.kind === "image")
-        .map((attachment, index) =>
-          this.prisma.attachment.create({
+        .map(async (attachment, index) => {
+          const persisted = await this.persistInboundImage(orgId, activityId, checkinId, attachment, index);
+          return this.prisma.attachment.create({
             data: {
               checkinId,
-              localPath: this.buildPendingImagePath(orgId, activityId, checkinId, attachment, index),
+              localPath: persisted?.localPath ?? this.buildPendingImagePath(orgId, activityId, checkinId, attachment, index),
               mimeType: attachment.mimeType ?? "image/jpeg",
-              sizeBytes: attachment.sizeBytes ?? 0,
+              sizeBytes: persisted?.sizeBytes ?? attachment.sizeBytes ?? 0,
               status: "active"
             }
-          })
-        )
+          });
+        })
     );
   }
 
+  private async persistInboundImage(orgId: string, activityId: string, checkinId: string, attachment: WeComBotAttachment, index: number): Promise<{ localPath: string; sizeBytes: number } | null> {
+    const buffer = await this.readInboundImageBuffer(attachment);
+    if (!buffer) return null;
+
+    const root = process.env.LOCAL_STORAGE_ROOT ?? "./storage/uploads";
+    const safeName = this.buildSafeImageName(attachment, index);
+    const relativePath = `wecom/${orgId}/${activityId}/${checkinId}/${safeName}`;
+    const absolutePath = join(root, relativePath);
+
+    await mkdir(join(root, "wecom", orgId, activityId, checkinId), { recursive: true });
+    await writeFile(absolutePath, buffer);
+    return { localPath: relativePath, sizeBytes: buffer.byteLength };
+  }
+
+  private async readInboundImageBuffer(attachment: WeComBotAttachment): Promise<Buffer | null> {
+    if (attachment.base64Data) {
+      const base64Data = attachment.base64Data.includes(",") ? attachment.base64Data.split(",").pop() ?? "" : attachment.base64Data;
+      return Buffer.from(base64Data, "base64");
+    }
+
+    if (!attachment.url) return null;
+
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) return null;
+      return Buffer.from(await response.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
   private buildPendingImagePath(orgId: string, activityId: string, checkinId: string, attachment: WeComBotAttachment, index: number): string {
-    const safeName = (attachment.filename ?? `${attachment.mediaId ?? attachment.fileId ?? `image-${index}`}.jpg`).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safeName = this.buildSafeImageName(attachment, index);
     return `wecom-pending/${orgId}/${activityId}/${checkinId}/${safeName}`;
+  }
+
+  private buildSafeImageName(attachment: WeComBotAttachment, index: number): string {
+    return basename(attachment.filename ?? `${attachment.mediaId ?? attachment.fileId ?? `image-${index}`}.jpg`).replace(/[^a-zA-Z0-9._-]/g, "_");
   }
 
   private async handleCheckinConfirm(user: CurrentUser): Promise<WeComBotEventResponse> {

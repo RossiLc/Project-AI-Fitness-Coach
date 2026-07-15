@@ -4,12 +4,16 @@ import { RemindersService } from "./reminders.service.js";
 
 describe("RemindersService", () => {
   it("生成示例提醒任务", async () => {
+    let memberWhere: unknown;
     const prisma = {
       activity: {
-        findFirst: async () => ({ id: "act_demo" })
+        findFirst: async () => ({ id: "act_demo", orgId: "org_demo" })
       },
       member: {
-        findFirst: async () => ({ id: "employee_demo", displayName: "员工小李" })
+        findFirst: async ({ where }: { where: unknown }) => {
+          memberWhere = where;
+          return { id: "wecom_member_001", displayName: "企业微信成员" };
+        }
       },
       reminderTask: {
         upsert: async ({ create }: { create: Record<string, unknown> }) => ({
@@ -24,7 +28,8 @@ describe("RemindersService", () => {
 
     expect(task.id).toBe("reminder_demo_generated");
     expect(task.status).toBe(ReminderStatus.Manual);
-    expect(task.memberId).toBe("employee_demo");
+    expect(task.memberId).toBe("wecom_member_001");
+    expect(memberWhere).toEqual({ orgId: "org_demo", status: "active" });
   });
 
   it("为当天未提交有效打卡的成员生成 manual 提醒任务", async () => {

@@ -5,7 +5,7 @@ import { AllowRoles } from "../auth/role-guard.factory.js";
 import { MembersService } from "./members.service.js";
 
 @Controller("admin/members")
-@UseGuards(AllowRoles(MemberRole.ActivityAdmin, MemberRole.OrgAdmin))
+@UseGuards(AllowRoles(MemberRole.OrgAdmin))
 export class MembersController {
   constructor(@Inject(MembersService) private readonly members: MembersService) {}
 

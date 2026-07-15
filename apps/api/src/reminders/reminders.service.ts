@@ -33,9 +33,13 @@ export class RemindersService {
 
   async createDemoManualTask() {
     const activity = await this.prisma.activity.findFirst({ where: { status: "active" }, orderBy: { startAt: "desc" } });
-    const member = await this.prisma.member.findFirst({ where: { id: "employee_demo" } });
-    if (!activity || !member) {
-      throw new ApiException(ApiErrorCode.ActivityNotActive, "缺少示例活动或成员，无法生成提醒任务");
+    if (!activity) {
+      throw new ApiException(ApiErrorCode.ActivityNotActive, "当前没有进行中的活动，无法生成提醒任务");
+    }
+
+    const member = await this.prisma.member.findFirst({ where: { orgId: activity.orgId, status: "active" } });
+    if (!member) {
+      throw new ApiException(ApiErrorCode.ActivityNotActive, "当前没有可提醒成员，请先通过企业微信消息或通讯录同步录入成员");
     }
 
     return this.prisma.reminderTask.upsert({

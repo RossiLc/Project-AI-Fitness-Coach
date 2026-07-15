@@ -147,7 +147,18 @@ describe("MembersService", () => {
             intensity: "moderate",
             calorieEstimate: null,
             submittedAt: new Date("2026-07-14T10:00:00.000Z"),
-            createdAt: new Date("2026-07-14T09:55:00.000Z")
+            createdAt: new Date("2026-07-14T09:55:00.000Z"),
+            attachments: [
+              {
+                id: "att_1",
+                checkinId: "chk_1",
+                localPath: "wecom/org_demo/act_demo/chk_1/photo.jpg",
+                mimeType: "image/jpeg",
+                sizeBytes: 1024,
+                status: "active",
+                createdAt: new Date("2026-07-14T09:56:00.000Z")
+              }
+            ]
           }
         ]
       }
@@ -159,5 +170,10 @@ describe("MembersService", () => {
     expect(result.member.id).toBe("member_demo");
     expect(result.checkins).toHaveLength(1);
     expect(result.checkins[0]).toMatchObject({ id: "chk_1", memberName: "Member Demo" });
+    expect(result.checkins[0].attachments?.[0]).toMatchObject({
+      id: "att_1",
+      localPath: "wecom/org_demo/act_demo/chk_1/photo.jpg",
+      status: "active"
+    });
   });
 });

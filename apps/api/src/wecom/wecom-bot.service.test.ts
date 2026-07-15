@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BotIntent, CheckinStatus, MemberRole, type CurrentUser } from "@openfit/shared";
 import { RuleRecognizerService } from "../checkins/rule-recognizer.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
@@ -6,7 +9,14 @@ import { BotIntentRouterService } from "./bot-intent-router.service.js";
 import { CoachSafetyService } from "./coach-safety.service.js";
 import { WeComBotService } from "./wecom-bot.service.js";
 
-function createService(modelAnswer?: string) {
+function response(payload: unknown, ok = true) {
+  return {
+    ok,
+    json: async () => payload
+  };
+}
+
+function createService(options: { modelAnswer?: string; imageRecognition?: Record<string, unknown> } = {}) {
   const user: CurrentUser = {
     id: "employee_demo",
     orgId: "org_demo",
@@ -33,7 +43,14 @@ function createService(modelAnswer?: string) {
       findFirst: async () => ({ id: "org_demo" })
     },
     activity: {
-      findFirst: async () => ({ id: "act_demo", name: "夏季 21 天运动打卡", status: "active" })
+      findFirst: async () => ({
+        id: "act_demo",
+        name: "夏季 21 天运动打卡",
+        status: "active",
+        ruleJson: {
+          content: "每天需要提交运动文字内容和运动图片凭证。\n参与天数排行榜按有效打卡天数排序。"
+        }
+      })
     },
     checkin: {
       create: async (args: unknown) => {
@@ -81,7 +98,8 @@ function createService(modelAnswer?: string) {
         intensity: "moderate",
         calorieEstimate: 238,
         confidence: 0.74,
-        notice: "AI 图片识别结果需用户确认。"
+        notice: "AI 图片识别结果需用户确认。",
+        ...options.imageRecognition
       };
     }
   };
@@ -91,7 +109,7 @@ function createService(modelAnswer?: string) {
       coachAdviceQuestions.push(question);
       return {
         riskLevel: "normal",
-        answer: modelAnswer ?? `模型回复：${question}`,
+        answer: options.modelAnswer ?? `模型回复：${question}`,
         model: "gpt-5.5",
         source: "model"
       };
@@ -108,6 +126,11 @@ function createService(modelAnswer?: string) {
 }
 
 describe("WeComBotService", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("首次出现的真实企业微信用户会自动建成员档案并继续处理消息", async () => {
     const { service, createdCheckins, createdMembers } = createService();
 
@@ -123,6 +146,33 @@ describe("WeComBotService", () => {
       externalId: "wecom_real_001"
     });
     expect(createdCheckins).toHaveLength(0);
+  });
+
+  it("uses WeCom user detail API to enrich auto-provisioned member profile", async () => {
+    vi.stubEnv("WECOM_MOCK_MODE", "false");
+    vi.stubEnv("WECOM_CORP_ID", "corp_demo");
+    vi.stubEnv("WECOM_APP_SECRET", "secret_demo");
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/cgi-bin/gettoken")) return response({ errcode: 0, access_token: "token_demo" });
+      if (url.includes("/cgi-bin/user/get")) {
+        return response({ errcode: 0, userid: "wecom_real_002", name: "张三", department: [1, 2] });
+      }
+      throw new Error(`unexpected url: ${url}`);
+    });
+    vi.stubGlobal(
+      "fetch",
+      fetchMock
+    );
+    const { service, createdMembers } = createService();
+
+    await service.handleEvent({ messageId: "msg_user_detail", fromUserId: "wecom_real_002", text: "玉米多少大卡热量", botRole: "coach" } as never);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(createdMembers[0]).toMatchObject({
+      displayName: "张三",
+      department: "1,2",
+      wecomUserid: "wecom_real_002"
+    });
   });
 
   it("缺少企业微信 userid 时拒绝处理，避免匿名入库", async () => {
@@ -176,8 +226,20 @@ describe("WeComBotService", () => {
     expect(coachAdviceQuestions).toEqual(["玉米多少大卡热量"]);
   });
 
-  it("图文混排打卡生成待确认记录并保存图片附件元数据", async () => {
-    const { service, createdAttachments } = createService();
+  it("AI 教练查询活动规则时返回后台维护的活动内容", async () => {
+    const { service, coachAdviceQuestions } = createService();
+
+    const result = await service.handleEvent({ messageId: "msg_activity_rules", fromUserId: "wecom_user_001", text: "活动规则是什么", botRole: "coach" } as never);
+
+    expect(result.intent).toBe(BotIntent.ActivityQuery);
+    expect(result.text).toContain("夏季 21 天运动打卡");
+    expect(result.text).toContain("每天需要提交运动文字内容和运动图片凭证");
+    expect(result.text).toContain("参与天数排行榜按有效打卡天数排序");
+    expect(coachAdviceQuestions).toHaveLength(0);
+  });
+
+  it("图文混排打卡由 AI 结合文字和图片推断，字段完整时直接提交", async () => {
+    const { service, createdCheckins, createdAttachments, imageParses } = createService();
 
     const result = await service.handleEvent({
       messageId: "msg_5",
@@ -198,6 +260,19 @@ describe("WeComBotService", () => {
 
     expect(result.intent).toBe(BotIntent.CheckinRecord);
     expect(result.checkinId).toBe("chk_demo");
+    expect(result.text).toContain("打卡成功");
+    expect(result.text).not.toContain("待确认");
+    expect(imageParses).toHaveLength(1);
+    expect(imageParses[0]).toMatchObject({ textHint: "打卡 跑步30分钟 5公里" });
+    expect(createdCheckins[0]).toMatchObject({
+      data: {
+        status: CheckinStatus.Submitted,
+        sourceType: "wecom_mixed",
+        sportType: "running",
+        durationMin: 28,
+        calorieEstimate: 238
+      }
+    });
     expect(createdAttachments).toHaveLength(1);
     expect(createdAttachments[0]).toMatchObject({
       data: {
@@ -209,8 +284,40 @@ describe("WeComBotService", () => {
     });
   });
 
-  it("打卡助手图片-only 消息通过 AI 图片识别生成待确认打卡", async () => {
-    const { service, createdAttachments, imageParses } = createService();
+  it("企业微信入站图片包含 base64Data 时保存为本地可预览文件", async () => {
+    const storageRoot = mkdtempSync(join(tmpdir(), "openfit-wecom-images-"));
+    vi.stubEnv("LOCAL_STORAGE_ROOT", storageRoot);
+    const { service, createdAttachments } = createService();
+
+    try {
+      await service.handleEvent({
+        messageId: "msg_local_image",
+        fromUserId: "wecom_user_001",
+        text: "打卡 跑步30分钟",
+        botRole: "checkin",
+        messageType: "mixed",
+        attachments: [
+          {
+            kind: "image",
+            filename: "run.jpg",
+            mimeType: "image/jpeg",
+            base64Data: Buffer.from("wecom-image").toString("base64")
+          }
+        ]
+      } as never);
+
+      const localPath = (createdAttachments[0] as { data: { localPath: string } }).data.localPath;
+      const absolutePath = join(storageRoot, localPath);
+      expect(localPath).toContain("wecom/org_demo/act_demo/chk_demo/");
+      expect(existsSync(absolutePath)).toBe(true);
+      expect(readFileSync(absolutePath, "utf8")).toBe("wecom-image");
+    } finally {
+      rmSync(storageRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("打卡助手图片-only 消息通过 AI 图片识别完整时直接提交", async () => {
+    const { service, createdCheckins, createdAttachments, imageParses } = createService();
 
     const result = await service.handleEvent({
       messageId: "msg_6",
@@ -222,10 +329,42 @@ describe("WeComBotService", () => {
     } as never);
 
     expect(result.intent).toBe(BotIntent.CheckinRecord);
-    expect(result.text).toContain("AI 图片识别");
+    expect(result.text).toContain("打卡成功");
+    expect(result.text).not.toContain("待确认");
     expect(result.checkinId).toBe("chk_demo");
     expect(imageParses).toHaveLength(1);
+    expect(createdCheckins[0]).toMatchObject({
+      data: {
+        status: CheckinStatus.Submitted,
+        sourceType: "wecom_image"
+      }
+    });
     expect(createdAttachments).toHaveLength(1);
+  });
+
+  it("AI 无法推断必填字段时提示补充且不创建打卡", async () => {
+    const { service, createdCheckins, createdAttachments } = createService({
+      imageRecognition: {
+        durationMin: 0,
+        calorieEstimate: undefined,
+        confidence: 0.4
+      }
+    });
+
+    const result = await service.handleEvent({
+      messageId: "msg_missing_duration",
+      fromUserId: "wecom_user_001",
+      text: "",
+      botRole: "checkin",
+      messageType: "image",
+      attachments: [{ kind: "image", mediaId: "media_003", filename: "photo.jpg", mimeType: "image/jpeg" }]
+    } as never);
+
+    expect(result.intent).toBe(BotIntent.CheckinRecord);
+    expect(result.text).toContain("运动时长");
+    expect(result.text).toContain("补充");
+    expect(createdCheckins).toHaveLength(0);
+    expect(createdAttachments).toHaveLength(0);
   });
 
   it("AI 教练收到运动文本不创建打卡", async () => {
@@ -253,7 +392,7 @@ describe("WeComBotService", () => {
   });
 
   it("AI 教练输出侧命中密钥泄漏时替换为安全提示", async () => {
-    const { service, coachAdviceQuestions } = createService("内部 token 是 sk-test-abcdefghijklmnopqrstuvwxyz123456");
+    const { service, coachAdviceQuestions } = createService({ modelAnswer: "内部 token 是 sk-test-abcdefghijklmnopqrstuvwxyz123456" });
 
     const result = await service.handleEvent({
       messageId: "msg_output_secret",
