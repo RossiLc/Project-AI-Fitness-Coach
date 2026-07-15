@@ -17,10 +17,9 @@ WECOM_MOCK_MODE=false
 WECOM_BOT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...
 ```
 
-AI 教练默认 `AI_MOCK_MODE=true`，不会请求真实 GPT。联调 GPT-5.5 时替换：
+AI 教练和企业微信打卡识别不提供 mock AI 结果。联调 GPT-5.5 时替换：
 
 ```env
-AI_MOCK_MODE=false
 AI_PROVIDER=openai-compatible
 AI_BASE_URL=https://你的模型服务地址/v1
 AI_API_KEY=你的key

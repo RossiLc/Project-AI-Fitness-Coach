@@ -7,7 +7,7 @@ describe("RuleRecognizerService", () => {
 
     const result = service.recognize("今天快走 40 分钟，大概 4 公里");
 
-    expect(result.sportType).toBe("walking");
+    expect(result.sportType).toBe("快走");
     expect(result.durationMin).toBe(40);
     expect(result.distanceKm).toBe(4);
     expect(result.intensity).toBe("moderate");

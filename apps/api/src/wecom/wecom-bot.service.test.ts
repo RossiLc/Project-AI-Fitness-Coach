@@ -16,7 +16,7 @@ function response(payload: unknown, ok = true) {
   };
 }
 
-function createService(options: { modelAnswer?: string; imageRecognition?: Record<string, unknown> } = {}) {
+function createService(options: { modelAnswer?: string; imageRecognition?: Record<string, unknown>; imageParseError?: Error } = {}) {
   const user: CurrentUser = {
     id: "employee_demo",
     orgId: "org_demo",
@@ -63,7 +63,7 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
               id: "chk_demo",
               memberId: user.id,
               status: CheckinStatus.Recognized,
-              sportType: "running",
+              sportType: "跑步",
               durationMin: 30,
               distanceKm: 5,
               intensity: "moderate",
@@ -91,8 +91,9 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
   const aiParser = {
     parseImage: async (input: unknown) => {
       imageParses.push(input);
+      if (options.imageParseError) throw options.imageParseError;
       return {
-        sportType: "running",
+        sportType: "跑步",
         durationMin: 28,
         distanceKm: 4.2,
         intensity: "moderate",
@@ -268,7 +269,7 @@ describe("WeComBotService", () => {
       data: {
         status: CheckinStatus.Submitted,
         sourceType: "wecom_mixed",
-        sportType: "running",
+        sportType: "跑步",
         durationMin: 28,
         calorieEstimate: 238
       }
@@ -363,6 +364,74 @@ describe("WeComBotService", () => {
     expect(result.intent).toBe(BotIntent.CheckinRecord);
     expect(result.text).toContain("运动时长");
     expect(result.text).toContain("补充");
+    expect(createdCheckins).toHaveLength(0);
+    expect(createdAttachments).toHaveLength(0);
+  });
+
+  it("AI 无法识别图片时不创建打卡，避免使用固定默认热量", async () => {
+    const { service, createdCheckins, createdAttachments } = createService({
+      imageParseError: new Error("AI_CHECKIN_IMAGE_PARSER_FAILED:502")
+    });
+
+    const result = await service.handleEvent({
+      messageId: "msg_ai_failed",
+      fromUserId: "wecom_user_001",
+      text: "打卡爬坡",
+      botRole: "checkin",
+      messageType: "mixed",
+      attachments: [{ kind: "image", filename: "photo.jpg", mimeType: "image/jpeg", base64Data: Buffer.from("image").toString("base64") }]
+    } as never);
+
+    expect(result.intent).toBe(BotIntent.CheckinRecord);
+    expect(result.text).toContain("AI 打卡识别暂时失败");
+    expect(createdCheckins).toHaveLength(0);
+    expect(createdAttachments).toHaveLength(0);
+  });
+
+  it("AI 未返回消耗能量时提示补充且不创建打卡", async () => {
+    const { service, createdCheckins, createdAttachments } = createService({
+      imageRecognition: {
+        sportType: "爬坡",
+        durationMin: 84,
+        calorieEstimate: undefined
+      }
+    });
+
+    const result = await service.handleEvent({
+      messageId: "msg_missing_calorie",
+      fromUserId: "wecom_user_001",
+      text: "打卡爬坡",
+      botRole: "checkin",
+      messageType: "mixed",
+      attachments: [{ kind: "image", filename: "photo.jpg", mimeType: "image/jpeg", base64Data: Buffer.from("image").toString("base64") }]
+    } as never);
+
+    expect(result.intent).toBe(BotIntent.CheckinRecord);
+    expect(result.text).toContain("消耗能量");
+    expect(createdCheckins).toHaveLength(0);
+    expect(createdAttachments).toHaveLength(0);
+  });
+
+  it("AI 返回英文运动类型时提示补充且不创建打卡", async () => {
+    const { service, createdCheckins, createdAttachments } = createService({
+      imageRecognition: {
+        sportType: "general",
+        durationMin: 84,
+        calorieEstimate: 447
+      }
+    });
+
+    const result = await service.handleEvent({
+      messageId: "msg_english_sport_type",
+      fromUserId: "wecom_user_001",
+      text: "打卡爬坡",
+      botRole: "checkin",
+      messageType: "mixed",
+      attachments: [{ kind: "image", filename: "photo.jpg", mimeType: "image/jpeg", base64Data: Buffer.from("image").toString("base64") }]
+    } as never);
+
+    expect(result.intent).toBe(BotIntent.CheckinRecord);
+    expect(result.text).toContain("运动类型");
     expect(createdCheckins).toHaveLength(0);
     expect(createdAttachments).toHaveLength(0);
   });

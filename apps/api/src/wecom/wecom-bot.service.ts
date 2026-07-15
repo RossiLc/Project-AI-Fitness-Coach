@@ -16,6 +16,8 @@ function readActivityContent(ruleJson: unknown): string {
   return typeof content === "string" ? content.trim() : "";
 }
 
+const invalidAiSportTypes = new Set(["general", "running", "cycling", "walking", "workout", "fitness", "unknown", "other"]);
+
 @Injectable()
 export class WeComBotService {
   private readonly handledMessages = new Map<string, WeComBotEventResponse>();
@@ -166,7 +168,9 @@ export class WeComBotService {
     const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active" }, orderBy: { startAt: "desc" } });
     if (!activity) return this.text(BotIntent.CheckinRecord, "当前没有进行中的活动，暂时无法打卡。");
 
-    const recognition = this.normalizeCheckinRecognition(await this.aiParser.parseImage({ textHint: text, attachments }));
+    const parsed = await this.parseAutoCheckin({ textHint: text, attachments });
+    if (!parsed.ok) return this.text(BotIntent.CheckinRecord, parsed.text);
+    const recognition = this.normalizeCheckinRecognition(parsed.recognition);
     const validation = this.validateAutoCheckinRecognition(recognition, attachments.length > 0);
     if (!validation.ok) return this.text(BotIntent.CheckinRecord, validation.text);
 
@@ -186,7 +190,9 @@ export class WeComBotService {
     if (!activity) return this.text(BotIntent.CheckinRecord, "当前没有进行中的活动，暂时无法打卡。");
 
     const attachments = body.attachments ?? [];
-    const recognition = this.normalizeCheckinRecognition(await this.aiParser.parseImage({ textHint: body.text, attachments }));
+    const parsed = await this.parseAutoCheckin({ textHint: body.text, attachments });
+    if (!parsed.ok) return this.text(BotIntent.CheckinRecord, parsed.text);
+    const recognition = this.normalizeCheckinRecognition(parsed.recognition);
     const validation = this.validateAutoCheckinRecognition(recognition, attachments.length > 0);
     if (!validation.ok) return this.text(BotIntent.CheckinRecord, validation.text);
 
@@ -206,7 +212,9 @@ export class WeComBotService {
 
     const missing: string[] = [];
     if (!recognition.sportType?.trim()) missing.push("运动类型");
+    if (invalidAiSportTypes.has(recognition.sportType.trim().toLowerCase())) missing.push("运动类型");
     if (!Number.isFinite(recognition.durationMin) || recognition.durationMin <= 0) missing.push("运动时长");
+    if (!Number.isFinite(recognition.calorieEstimate) || (recognition.calorieEstimate ?? 0) <= 0) missing.push("消耗能量");
 
     if (missing.length > 0) {
       return {
@@ -224,16 +232,19 @@ export class WeComBotService {
     return {
       ...recognition,
       sportType,
-      durationMin,
-      calorieEstimate: recognition.calorieEstimate ?? (sportType && durationMin > 0 ? this.estimateCalories(sportType, durationMin, recognition.intensity) : undefined)
+      durationMin
     };
   }
 
-  private estimateCalories(sportType: string, durationMin: number, intensity: RecognitionResultDto["intensity"]): number {
-    const normalized = sportType.toLowerCase();
-    const base = normalized.includes("run") || sportType.includes("跑") ? 8.5 : normalized.includes("cycl") || sportType.includes("骑") ? 6.5 : normalized.includes("walk") || sportType.includes("走") ? 4.8 : 5.5;
-    const factor = intensity === "high" ? 1.2 : intensity === "low" ? 0.82 : 1;
-    return Math.max(1, Math.round(durationMin * base * factor));
+  private async parseAutoCheckin(input: { textHint?: string; attachments: WeComBotAttachment[] }): Promise<{ ok: true; recognition: RecognitionResultDto } | { ok: false; text: string }> {
+    try {
+      return { ok: true, recognition: await this.aiParser.parseImage(input) };
+    } catch {
+      return {
+        ok: false,
+        text: "AI 打卡识别暂时失败，未创建打卡记录。请稍后重新发送图片和文字打卡，或联系管理员检查 AI_BASE_URL、AI_API_KEY 和模型视觉识别能力。"
+      };
+    }
   }
 
   private buildAutoSubmittedResponse(checkinId: string, recognition: RecognitionResultDto, attachmentCount: number): WeComBotEventResponse {

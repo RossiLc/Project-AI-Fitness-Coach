@@ -70,8 +70,8 @@ export class AiProviderService {
 
   async parseCheckinText(text: string): Promise<RecognitionResultDto> {
     const config = this.configService.getConfig();
-    if (config.mockMode || !config.baseUrl || !config.apiKey) {
-      return fallbackParse(text, config.mockMode ? "AI mock 解析，需用户确认。" : "AI 未配置，使用本地降级解析，需用户确认。");
+    if (!config.baseUrl || !config.apiKey) {
+      throw new Error("AI_CHECKIN_PARSER_UNCONFIGURED");
     }
 
     const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -85,7 +85,7 @@ export class AiProviderService {
         messages: [
           {
             role: "system",
-            content: "你是运动打卡文本解析器。只返回 JSON：sportType,durationMin,distanceKm,intensity,calorieEstimate,confidence,notice。"
+            content: "你是运动打卡文本解析器。只返回 JSON：sportType,durationMin,distanceKm,intensity,calorieEstimate,confidence,notice。sportType 必须使用中文运动类型，例如跑步、爬坡、骑行、快走、力量训练。不要使用 general/running/cycling 这类英文枚举。"
           },
           { role: "user", content: text }
         ],
@@ -93,36 +93,37 @@ export class AiProviderService {
       })
     });
 
-    if (!response.ok) return fallbackParse(text, `AI 解析失败 HTTP ${response.status}，使用本地降级解析，需用户确认。`);
+    if (!response.ok) throw new Error(`AI_CHECKIN_PARSER_FAILED:${response.status}`);
 
     const payload = (await response.json()) as ChatCompletionResponse;
     const content = payload.choices?.[0]?.message?.content;
-    if (!content) return fallbackParse(text, "AI 未返回有效解析，使用本地降级解析，需用户确认。");
+    if (!content) throw new Error("AI_CHECKIN_PARSER_EMPTY_RESPONSE");
 
     try {
-      const parsed = JSON.parse(content) as Partial<RecognitionResultDto>;
+      const parsed = parseJsonObject(content) as Partial<RecognitionResultDto>;
       return {
-        sportType: parsed.sportType ?? "general",
-        durationMin: parsed.durationMin ?? 30,
+        sportType: parsed.sportType ?? "",
+        durationMin: parsed.durationMin ?? 0,
         distanceKm: parsed.distanceKm,
         intensity: parsed.intensity ?? "moderate",
         calorieEstimate: parsed.calorieEstimate,
         confidence: parsed.confidence ?? 0.72,
         notice: parsed.notice ?? "AI 解析结果需用户确认，热量仅供活动统计参考。"
       };
-    } catch {
-      return fallbackParse(text, "AI 返回内容无法解析，使用本地降级解析，需用户确认。");
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error("AI_CHECKIN_PARSER_INVALID_JSON");
+      throw error;
     }
   }
 
   async parseCheckinImage(input: AiImageCheckinParseInput): Promise<RecognitionResultDto> {
     const config = this.configService.getConfig();
-    if (config.mockMode || !config.baseUrl || !config.apiKey) {
-      return fallbackParse(input.textHint || "图片识别 跑步 30 分钟", config.mockMode ? "AI 图片识别 mock 结果，需用户确认。" : "AI 未配置，使用图片识别降级结果，需用户确认。");
+    if (!config.baseUrl || !config.apiKey) {
+      throw new Error("AI_CHECKIN_IMAGE_PARSER_UNCONFIGURED");
     }
 
     const imageUrls = input.attachments
-      .map((attachment) => attachment.url ?? (attachment.base64Data ? `data:${attachment.mimeType ?? "image/jpeg"};base64,${attachment.base64Data}` : undefined))
+      .map((attachment) => (attachment.base64Data ? `data:${attachment.mimeType ?? "image/jpeg"};base64,${attachment.base64Data}` : attachment.url))
       .filter((value): value is string => Boolean(value));
     const imageRefs = input.attachments
       .map((attachment) => attachment.url ?? attachment.mediaId ?? attachment.fileId ?? attachment.filename)
@@ -131,7 +132,12 @@ export class AiProviderService {
     const userContent =
       imageUrls.length > 0
         ? [
-            { type: "text", text: `文字提示：${input.textHint || "无"}。请识别这张运动打卡图片。` },
+            {
+              type: "text",
+              text:
+                `文字提示：${input.textHint || "无"}。请基于图片 OCR 和文字语义识别运动打卡数据。` +
+                "如果图片中已经展示运动时长、热量或运动类型，必须优先使用图片中的数值，不要自行估算覆盖。sportType 必须使用中文运动类型，例如爬坡、跑步、骑行、快走、力量训练。"
+            },
             ...imageUrls.map((url) => ({ type: "image_url", image_url: { url } }))
           ]
         : `文字提示：${input.textHint || "无"}\n图片引用：${imageRefs || "企业微信图片附件"}`;
@@ -146,7 +152,9 @@ export class AiProviderService {
         messages: [
           {
             role: "system",
-            content: "你是运动打卡图片识别器。根据图片和可选文字提示推断运动类型、时长、距离、强度和热量，只返回 JSON：sportType,durationMin,distanceKm,intensity,calorieEstimate,confidence,notice。"
+            content:
+              "你是运动打卡图片识别器。根据图片 OCR 和可选文字提示提取运动类型、时长、距离、强度和热量，只返回 JSON：sportType,durationMin,distanceKm,intensity,calorieEstimate,confidence,notice。" +
+              "字段要求：sportType 必须是中文运动类型；durationMin 为分钟整数；calorieEstimate 为千卡整数。若图片明确展示总消耗热量，优先使用总消耗热量；若只有活动热量，则使用活动热量并在 notice 说明。不要返回 general/running/cycling 等英文枚举，不要在缺少依据时用固定默认值。"
           },
           { role: "user", content: userContent }
         ],
@@ -154,42 +162,35 @@ export class AiProviderService {
       })
     });
 
-    if (!response.ok) return fallbackParse(input.textHint || "图片识别 跑步 30 分钟", `AI 图片识别失败 HTTP ${response.status}，使用降级结果，需用户确认。`);
+    if (!response.ok) throw new Error(`AI_CHECKIN_IMAGE_PARSER_FAILED:${response.status}`);
 
     const payload = (await response.json()) as ChatCompletionResponse;
     const content = payload.choices?.[0]?.message?.content;
-    if (!content) return fallbackParse(input.textHint || "图片识别 跑步 30 分钟", "AI 图片识别未返回有效内容，使用降级结果，需用户确认。");
+    if (!content) throw new Error("AI_CHECKIN_IMAGE_PARSER_EMPTY_RESPONSE");
 
     try {
-      const parsed = JSON.parse(content) as Partial<RecognitionResultDto>;
+      const parsed = parseJsonObject(content) as Partial<RecognitionResultDto>;
       return {
-        sportType: parsed.sportType ?? "general",
-        durationMin: parsed.durationMin ?? 30,
+        sportType: parsed.sportType ?? "",
+        durationMin: parsed.durationMin ?? 0,
         distanceKm: parsed.distanceKm,
         intensity: parsed.intensity ?? "moderate",
         calorieEstimate: parsed.calorieEstimate,
         confidence: parsed.confidence ?? 0.7,
         notice: parsed.notice ?? "AI 图片识别结果需用户确认，热量仅供活动统计参考。"
       };
-    } catch {
-      return fallbackParse(input.textHint || "图片识别 跑步 30 分钟", "AI 图片识别返回内容无法解析，使用降级结果，需用户确认。");
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error("AI_CHECKIN_IMAGE_PARSER_INVALID_JSON");
+      throw error;
     }
   }
 }
 
-function fallbackParse(text: string, notice: string): RecognitionResultDto {
-  const durationMin = Number(text.match(/(\d+(?:\.\d+)?)\s*(分钟|min)/i)?.[1] ?? 30);
-  const distanceMatch = text.match(/(\d+(?:\.\d+)?)\s*(公里|km|千米)/i);
-  const distanceKm = distanceMatch?.[1] ? Number(distanceMatch[1]) : undefined;
-  const sportType = text.includes("跑") ? "running" : text.includes("走") ? "walking" : text.includes("骑") ? "cycling" : "general";
-  const intensity = text.includes("累") || text.includes("冲刺") ? "high" : text.includes("轻松") ? "low" : "moderate";
-  return {
-    sportType,
-    durationMin,
-    distanceKm,
-    intensity,
-    calorieEstimate: Math.round(durationMin * (sportType === "running" ? 8.5 : sportType === "cycling" ? 6.5 : 5)),
-    confidence: distanceKm ? 0.82 : 0.68,
-    notice
-  };
+function parseJsonObject(content: string): unknown {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("```")) {
+    const json = trimmed.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    return JSON.parse(json);
+  }
+  return JSON.parse(trimmed);
 }

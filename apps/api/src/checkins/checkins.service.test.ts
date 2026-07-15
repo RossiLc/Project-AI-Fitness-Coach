@@ -18,7 +18,7 @@ describe("CheckinsService", () => {
           id: "chk_latest",
           memberId: user.id,
           status: CheckinStatus.Recognized,
-          sportType: "running",
+          sportType: "跑步",
           durationMin: 30,
           distanceKm: 5,
           intensity: "moderate",
@@ -50,7 +50,7 @@ describe("CheckinsService", () => {
           id: "chk_latest",
           memberId: user.id,
           status: CheckinStatus.Recognized,
-          sportType: "running",
+          sportType: "跑步",
           durationMin: 30
         }),
         update: async () => {
@@ -137,7 +137,7 @@ describe("CheckinsService", () => {
       inputText: "打卡 跑步30分钟",
       modelName: "ai-image-checkin-parser",
       recognition: {
-        sportType: "running",
+        sportType: "跑步",
         durationMin: 30,
         intensity: "moderate",
         calorieEstimate: 255,
@@ -155,7 +155,7 @@ describe("CheckinsService", () => {
         memberId: "employee_demo",
         status: CheckinStatus.Submitted,
         sourceType: "wecom_mixed",
-        sportType: "running",
+        sportType: "跑步",
         durationMin: 30,
         calorieEstimate: 255,
         recognitions: {
