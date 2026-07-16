@@ -7,11 +7,20 @@ interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
+export type CoachChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
 @Injectable()
 export class AiProviderService {
   constructor(@Inject(AiConfigService) private readonly configService: AiConfigService) {}
 
   async generateCoachAdvice(question: string): Promise<CoachAdviceResponse> {
+    return this.generateCoachAdviceWithMessages([{ role: "user", content: question }]);
+  }
+
+  async generateCoachAdviceWithMessages(messages: CoachChatMessage[]): Promise<CoachAdviceResponse> {
     const config = this.configService.getConfig();
     if (!config.baseUrl || !config.apiKey) {
       return {
@@ -35,7 +44,7 @@ export class AiProviderService {
             role: "system",
             content: coachSystemPrompt
           },
-          { role: "user", content: question }
+          ...messages
         ]
       })
     });

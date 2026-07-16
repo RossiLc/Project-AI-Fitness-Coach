@@ -2,7 +2,6 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ApiErrorCode, ReminderStatus, type GroupMissingCheckinReminderResult, type ReminderTaskDto } from "@openfit/shared";
 import { ApiException } from "../common/api-response.js";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { WeComAppService } from "../wecom/wecom-app.service.js";
 import { WeComMessageSender } from "../wecom/wecom-message.sender.js";
 
 type MissingMemberForReminder = {
@@ -20,7 +19,6 @@ type GroupReminderArgs = {
 export class RemindersService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Optional() @Inject(WeComAppService) private readonly wecomApp?: WeComAppService,
     @Optional() @Inject(WeComMessageSender) private readonly wecomSender?: WeComMessageSender
   ) {}
 
@@ -50,7 +48,7 @@ export class RemindersService {
 
     const member = await this.prisma.member.findFirst({ where: { orgId: activity.orgId, status: "active" } });
     if (!member) {
-      throw new ApiException(ApiErrorCode.ActivityNotActive, "当前没有可提醒成员，请先通过企业微信消息或通讯录同步录入成员");
+      throw new ApiException(ApiErrorCode.ActivityNotActive, "当前没有可提醒成员，请先通过群管理导入成员名册");
     }
 
     return this.prisma.reminderTask.upsert({
@@ -139,17 +137,12 @@ export class RemindersService {
       });
     }
 
-    const result = await this.wecomApp?.sendAppMessage({
-      toUserId: task.member.wecomUserid,
-      text: `Open Fit 提醒：${task.member.displayName}，今天还没有有效打卡，请完成今日运动记录。`
-    });
-
     return this.prisma.reminderTask.update({
       where: { id },
       data: {
-        status: result?.ok ? ReminderStatus.Sent : ReminderStatus.Failed,
+        status: ReminderStatus.Manual,
         attemptCount: { increment: 1 },
-        lastError: result?.ok ? null : result?.message ?? "自建应用消息服务不可用"
+        lastError: "当前不支持个人定向提醒，请使用群提醒未打卡"
       }
     });
   }

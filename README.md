@@ -144,7 +144,7 @@ pnpm docker:up
 
 `pnpm docker:reset` 会执行 `docker compose down -v`，会删除数据库 volume；本地上传文件目录 `storage/uploads` 是宿主机目录挂载，不会被这个命令删除。
 
-`pnpm docker:up` 重新启动 API 容器时，会先执行数据库 bootstrap：同步 Prisma schema 创建表结构，并写入幂等基础组织、活动和企业微信配置数据，然后才启动 API 服务。因此 reset 后不需要手动执行 `pnpm dev:db:setup`。bootstrap 不写入 `员工小李`、`活动管理员王姐`、`企业管理员老周` 这类演示成员；成员列表只来自企业微信消息自动建档或通讯录同步。
+`pnpm docker:up` 重新启动 API 容器时，会先执行数据库 bootstrap：同步 Prisma schema 创建表结构，并写入幂等基础组织、活动和企业微信配置数据，然后才启动 API 服务。因此 reset 后不需要手动执行 `pnpm dev:db:setup`。bootstrap 不写入 `员工小李`、`活动管理员王姐`、`企业管理员老周` 这类演示成员；成员列表来自企业微信消息自动建档或群管理 Excel userid 名册导入。
 
 如果遇到 `The table public.ActivityRule does not exist in the current database`，说明当前运行的 API 仍是旧代码或旧 Docker 镜像，旧代码会查询已经取消使用的 `ActivityRule` 表。处理方式：
 
@@ -180,10 +180,10 @@ Web 工作台当前是单管理员后台，正式工作路径是：
 1. 进入“群管理”新增一个企业微信群，复制生成的绑定口令。
 2. 在目标企业微信群里 @Open Fit 打卡助手发送：`绑定群 OF-XXXXXX`。
 3. 回到 Web 刷新群管理，确认该群状态为“已绑定”并选择为当前群。
-4. 在群管理中粘贴群成员中文名列表，例如 `张三;李四;`，系统会通过企业微信通讯录接口匹配 userid。
+4. 在群管理中上传成员 Excel 名册，表头包含 `userId`、`中文名称` 和可选 `部门`。系统会按 userid 覆盖更新或新增成员。
 5. 后续运营看板、成员管理、活动配置、排行榜管理和提醒未打卡都按当前群执行。
 
-中文名导入需要配置 `WECOM_CORP_ID` 和具备通讯录读取权限的 `WECOM_APP_SECRET`。如果出现重名或未找到，Web 会展示待人工处理结果，不会猜测绑定。
+当前方案不依赖企业微信企业 ID、通讯录 Secret 或自建应用 API。企业微信消息里的 `from.userid` 是身份主键；成员中文名称和部门由 Excel 名册维护。
 
 AI 教练咨询链路不使用模拟 AI 回复：用户输入先经过本地轻量安全围栏，低风险问题才调用 OpenAI-compatible 真实模型。模型输出还会再做一次安全校验，命中密钥泄漏、提示词注入、敏感内容或健康高风险时会替换为安全提示。未配置 `AI_BASE_URL` 或 `AI_API_KEY` 时会明确提示 AI 服务尚未配置；你后续只需要在 `.env` 或部署密钥中替换 URL、key 和模型名。
 

@@ -51,20 +51,21 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 - **AND** 群状态 SHALL 变为 `active`
 - **AND** 后续后台主动提醒 SHALL 使用该群 `chatid` 作为发送目标
 
-#### Scenario: 中文名导入群成员
-- **WHEN** 管理员提交中文名列表导入群成员
-- **THEN** 后端 SHALL 调用企业微信通讯录接口按名称匹配 userid
-- **AND** 匹配唯一时 SHALL upsert 本地成员并写入 `WeComGroupMember`
-- **AND** 重名或未找到时 SHALL 返回结构化结果给前端处理
+#### Scenario: Excel userid 名册导入群成员
+- **WHEN** 管理员上传包含 `userid`、中文名称和可选部门的 Excel 名册导入群成员
+- **THEN** 后端 SHALL 按 `userid` 作为唯一身份键 upsert 本地成员档案
+- **AND** 相同 `userid` SHALL 覆盖成员姓名、部门和启用状态
+- **AND** 新 `userid` SHALL 新建成员并写入当前群成员关系
+- **AND** 缺少 `userid` 或姓名的行 SHALL 跳过并返回行号和原因
 
-### Requirement: 企业微信成员信息补全
-后端 SHALL 使用企业微信入站消息中的 `from.userid` 识别成员；当 userid 首次出现且配置了通讯录凭据时，后端 SHALL 调用企业微信通讯录接口补全成员姓名和部门。
+### Requirement: 企业微信成员信息建档
+后端 SHALL 使用企业微信入站消息中的 `from.userid` 识别成员；当 userid 首次出现时，后端 SHALL 仅按 userid 自动创建本地成员档案，不调用企业微信通讯录接口。
 
 #### Scenario: 未知 userid 自动建档
 - **WHEN** 企业微信机器人收到未知 `userid` 的消息
 - **THEN** 后端 SHALL 创建本地成员档案并继续处理本次消息
-- **AND** 如果 `WECOM_CORP_ID` 和 `WECOM_APP_SECRET` 已配置，后端 SHALL 调用企业微信 access token 和成员详情接口补全 `displayName` 与 `department`
-- **AND** 如果企业微信接口不可用或未配置，后端 SHALL 降级使用 userid 生成显示名，不得阻塞消息处理
+- **AND** 新成员 SHALL 使用 userid 生成默认显示名
+- **AND** 管理员后续 SHALL 通过 Excel userid 名册覆盖成员姓名和部门
 
 ### Requirement: 分类排行榜 API
 后端 SHALL 支持按打卡次数、运动时长和消耗能量查询和重建排行榜。

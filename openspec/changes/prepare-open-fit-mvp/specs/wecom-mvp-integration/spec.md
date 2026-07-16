@@ -1,13 +1,14 @@
 ## ADDED Requirements
 
-### Requirement: 企业微信权限预检
+### Requirement: 企业微信智能机器人权限预检
 
-系统 SHALL 在 MVP 实现前确认企业微信群机器人、自建应用消息、成员 userid 获取和 Web 登录所需权限是否可用，并记录每项权限的负责人、验证方式和失败降级方案。
+系统 SHALL 在 MVP 实现前确认企业微信智能机器人长连接、入站 `from.userid`、群 `chatid` 捕获和主动群推送是否可用，并记录验证方式和失败处理。
 
 #### Scenario: 权限可用性检查
 
 - **WHEN** 项目准备进入企业微信相关功能实现
-- **THEN** 变更产物必须列出群机器人 webhook、自建应用 access token、成员列表或 userid 映射、Web 登录入口的可用状态和阻塞项
+- **THEN** 变更产物必须列出打卡助手 Bot ID/Secret、AI 教练 Bot ID/Secret、目标群 `chatid` 捕获和长连接主动发送的可用状态
+- **AND** 系统 SHALL NOT 要求企业 ID、自建应用 Secret、OAuth 或通讯录同步权限
 
 ### Requirement: 企业微信群运营边界
 
@@ -22,7 +23,7 @@
 
 ### Requirement: 群绑定与成员初始化
 
-系统 SHALL 通过绑定口令把 Web 后台创建的群与企业微信智能机器人入站消息中的 `chatid` 关联；系统 SHALL 支持通过中文名粘贴导入当前群成员，并用企业微信通讯录接口匹配 userid。
+系统 SHALL 通过绑定口令把 Web 后台创建的群与企业微信智能机器人入站消息中的 `chatid` 关联；系统 SHALL 支持通过 Excel userid 名册导入当前群成员，不依赖企业微信通讯录 Secret 完成群成员初始化。
 
 #### Scenario: 绑定群 chatid
 
@@ -33,10 +34,11 @@
 
 #### Scenario: 导入群成员
 
-- **WHEN** 管理员粘贴群成员中文名列表
-- **THEN** 系统 SHALL 调用企业微信通讯录接口匹配中文名和 userid
-- **AND** 匹配成功的成员 SHALL 写入 `WeComGroupMember`
-- **AND** 重名和未找到的姓名 SHALL 返回给管理员人工处理
+- **WHEN** 管理员上传包含 `userId`、中文名称和可选部门的 Excel 名册
+- **THEN** 系统 SHALL 按 `userid` upsert 本地成员并写入 `WeComGroupMember`
+- **AND** 相同 `userid` SHALL 覆盖姓名和部门
+- **AND** 新 `userid` SHALL 新增成员
+- **AND** 缺少必要字段的行 SHALL 返回给管理员处理
 
 ### Requirement: 智能机器人双入口交互
 

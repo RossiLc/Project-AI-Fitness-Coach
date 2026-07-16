@@ -1,9 +1,8 @@
-import { Inject, Injectable, Optional } from "@nestjs/common";
-import { MemberRole, type ImportGroupMembersByNameResult, type WeComDirectoryMemberDto, type WeComGroupDto } from "@openfit/shared";
+import { Inject, Injectable } from "@nestjs/common";
+import { MemberRole, type ImportGroupMemberByUseridRow, type ImportGroupMembersByUseridResult, type WeComGroupDto } from "@openfit/shared";
 import { createHash, randomBytes } from "node:crypto";
 import { ApiException } from "../common/api-response.js";
 import { PrismaService } from "../prisma/prisma.service.js";
-import { WeComDirectoryService } from "./wecom-directory.service.js";
 
 type GroupRow = {
   id: string;
@@ -17,12 +16,15 @@ type GroupRow = {
   _count?: { members: number };
 };
 
+type ImportedWeComMember = {
+  userid: string;
+  name: string;
+  department?: string;
+};
+
 @Injectable()
 export class GroupsService {
-  constructor(
-    @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Optional() @Inject(WeComDirectoryService) private readonly directory?: WeComDirectoryService
-  ) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(orgId: string): Promise<WeComGroupDto[]> {
     const groups = await this.prisma.weComGroup.findMany({
@@ -75,35 +77,38 @@ export class GroupsService {
     await this.observeMember(orgId, group.id, wecomUserid, "observed");
   }
 
-  async importMembersByNames(orgId: string, groupId: string, namesText: string): Promise<ImportGroupMembersByNameResult> {
+  async importMembersByUseridRows(orgId: string, groupId: string, rows: ImportGroupMemberByUseridRow[]): Promise<ImportGroupMembersByUseridResult> {
     const group = await this.prisma.weComGroup.findFirst({ where: { id: groupId, orgId } });
     if (!group) throw new ApiException("WECOM_GROUP_NOT_FOUND", "企业微信群不存在", 404);
 
-    const names = parseNames(namesText);
-    const directory = await this.directory?.listMembers();
-    const byName = new Map<string, WeComDirectoryMemberDto[]>();
-    for (const item of directory ?? []) {
-      const list = byName.get(item.name) ?? [];
-      list.push(item);
-      byName.set(item.name, list);
-    }
-
-    const result: ImportGroupMembersByNameResult = { groupId, matched: [], duplicates: [], notFound: [] };
-    for (const name of names) {
-      const candidates = byName.get(name) ?? [];
-      if (candidates.length === 0) {
-        result.notFound.push(name);
+    const result: ImportGroupMembersByUseridResult = { groupId, created: [], updated: [], skipped: [] };
+    const seen = new Set<string>();
+    for (const [index, row] of rows.entries()) {
+      const rowNumber = index + 2;
+      const userid = row.userid?.trim();
+      const name = row.name?.trim();
+      const department = row.department?.trim() || undefined;
+      if (!userid) {
+        result.skipped.push({ rowNumber, reason: "缺少 userid" });
         continue;
       }
-      if (candidates.length > 1) {
-        result.duplicates.push({ name, candidates });
+      if (!name) {
+        result.skipped.push({ rowNumber, reason: "缺少姓名" });
         continue;
       }
+      if (seen.has(userid)) {
+        result.skipped.push({ rowNumber, reason: "重复 userid" });
+        continue;
+      }
+      seen.add(userid);
 
-      const directoryMember = candidates[0]!;
+      const existing = await this.prisma.member.findFirst({ where: { orgId, wecomUserid: userid } });
+      const directoryMember = { userid, name, department };
       const member = await this.upsertMemberFromDirectory(orgId, directoryMember);
-      await this.linkGroupMember(groupId, member.id, directoryMember, "address_book");
-      result.matched.push({ name, userid: directoryMember.userid, memberId: member.id, department: directoryMember.department });
+      await this.linkGroupMember(groupId, member.id, directoryMember, "excel_import");
+      const item = { userid, name, memberId: member.id, department };
+      if (existing) result.updated.push(item);
+      else result.created.push(item);
     }
     return result;
   }
@@ -135,7 +140,7 @@ export class GroupsService {
     await this.linkGroupMember(groupId, member.id, { userid: wecomUserid, name: member.displayName, department: member.department ?? undefined }, source);
   }
 
-  private async upsertMemberFromDirectory(orgId: string, item: WeComDirectoryMemberDto) {
+  private async upsertMemberFromDirectory(orgId: string, item: ImportedWeComMember) {
     const existing = await this.prisma.member.findFirst({ where: { orgId, wecomUserid: item.userid } });
     if (existing) {
       return this.prisma.member.update({
@@ -157,7 +162,7 @@ export class GroupsService {
     });
   }
 
-  private async linkGroupMember(groupId: string, memberId: string, item: WeComDirectoryMemberDto, source: string): Promise<void> {
+  private async linkGroupMember(groupId: string, memberId: string, item: ImportedWeComMember, source: string): Promise<void> {
     await this.prisma.weComGroupMember.upsert({
       where: { groupId_memberId: { groupId, memberId } },
       update: {

@@ -181,21 +181,21 @@ export interface CreateWeComGroupRequest {
   name: string;
 }
 
-export interface ImportGroupMembersByNameRequest {
-  namesText: string;
-}
-
-export interface WeComDirectoryMemberDto {
+export interface ImportGroupMemberByUseridRow {
   userid: string;
   name: string;
   department?: string;
 }
 
-export interface ImportGroupMembersByNameResult {
+export interface ImportGroupMembersByUseridRequest {
+  rows: ImportGroupMemberByUseridRow[];
+}
+
+export interface ImportGroupMembersByUseridResult {
   groupId: string;
-  matched: Array<{ name: string; userid: string; memberId: string; department?: string }>;
-  duplicates: Array<{ name: string; candidates: WeComDirectoryMemberDto[] }>;
-  notFound: string[];
+  created: Array<{ userid: string; name: string; memberId: string; department?: string }>;
+  updated: Array<{ userid: string; name: string; memberId: string; department?: string }>;
+  skipped: Array<{ rowNumber: number; reason: string }>;
 }
 
 export interface MemberCheckinHistoryDto {
@@ -214,54 +214,6 @@ export interface GroupMissingCheckinReminderResult {
 
 export interface BindWeComUseridRequest {
   wecomUserid: string;
-}
-
-export interface SyncWeComMembersResponse {
-  mode: "missing_config" | "wecom_api";
-  totalLocalMembers: number;
-  created: number;
-  updated: number;
-  message: string;
-}
-
-export interface WeComAppStatusDto {
-  mode: "configured" | "missing_config";
-  corpIdConfigured: boolean;
-  agentIdConfigured: boolean;
-  secretConfigured: boolean;
-  callbackUrl?: string;
-  oauthReady: boolean;
-  appMessageReady: boolean;
-  memberSyncReady: boolean;
-}
-
-export interface WeComOAuthLoginUrlResponse {
-  mode: "configured" | "missing_config";
-  url?: string;
-  state: string;
-  message?: string;
-}
-
-export interface WeComOAuthCallbackRequest {
-  code: string;
-  state?: string;
-}
-
-export interface WeComOAuthCallbackResponse {
-  mode: "mock" | "wecom_api";
-  user: CurrentUser;
-  message: string;
-}
-
-export interface WeComAppMessageRequest {
-  toUserId: string;
-  text: string;
-}
-
-export interface WeComAppMessageResult {
-  mode: "mock" | "wecom_api";
-  ok: boolean;
-  message: string;
 }
 
 export interface WeComBotEventRequest {

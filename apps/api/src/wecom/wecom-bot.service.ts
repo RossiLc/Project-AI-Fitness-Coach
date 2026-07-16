@@ -1,9 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { BotIntent, MemberRole, type CurrentUser, type RecognitionResultDto, type WeComBotAttachment, type WeComBotEventRequest, type WeComBotEventResponse, type WeComBotRole, type WeComGroupDto } from "@openfit/shared";
 import { AiCheckinParserService } from "../ai/ai-checkin-parser.service.js";
+import { CoachConversationService, type CoachConversationMessageInput } from "../ai/coach-conversation.service.js";
 import { AiProviderService } from "../ai/ai-provider.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
 import { GroupsService } from "../groups/groups.service.js";
@@ -30,7 +31,8 @@ export class WeComBotService {
     @Inject(CoachSafetyService) private readonly coachSafety: CoachSafetyService,
     @Inject(AiCheckinParserService) private readonly aiParser: AiCheckinParserService,
     @Inject(AiProviderService) private readonly aiProvider: AiProviderService,
-    @Inject(GroupsService) private readonly groups: GroupsService
+    @Inject(GroupsService) private readonly groups: GroupsService,
+    @Optional() @Inject(CoachConversationService) private readonly conversations?: CoachConversationService
   ) {}
 
   async handleEvent(body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
@@ -55,7 +57,7 @@ export class WeComBotService {
     const intent = this.router.detect(body.text);
     if (intent === BotIntent.CheckinRecord) return this.remember(body.messageId, await this.handleCheckinRecord(user, body.text, body.attachments, body.chatId));
     if (intent === BotIntent.CheckinConfirm) return this.remember(body.messageId, await this.handleCheckinConfirm(user));
-    if (intent === BotIntent.CoachAdvice) return this.remember(body.messageId, await this.handleCoachAdvice(body.text));
+    if (intent === BotIntent.CoachAdvice) return this.remember(body.messageId, await this.handleCoachAdvice(user, body));
     if (intent === BotIntent.ActivityQuery) return this.remember(body.messageId, this.text(intent, "当前活动：夏季 21 天运动打卡。发送你的运动内容，例如“跑步30分钟”，我会先生成待确认打卡。"));
     if (intent === BotIntent.LeaderboardQuery) return this.remember(body.messageId, this.text(intent, "排行榜查询已收到。第一阶段请先在 Web 工作台查看完整榜单，群内不会公开他人敏感数据。"));
     return this.remember(body.messageId, this.text(BotIntent.Unknown, "我还没理解你的意思。请明确选择打卡、AI教练、活动规则或排行榜，例如“打卡 跑步30分钟”或“AI教练 怎么拉伸”。"));
@@ -96,7 +98,7 @@ export class WeComBotService {
     const intent = this.router.detect(text);
     if (intent === BotIntent.ActivityQuery) return this.handleActivityQuery(user, body.chatId);
     if (intent === BotIntent.LeaderboardQuery) return this.text(intent, "排行榜查询已收到。群内只展示必要排名信息，不公开图片、健康咨询原文或未打卡名单。");
-    return this.handleCoachAdvice(text);
+    return this.handleCoachAdvice(user, body);
   }
 
   private async handleActivityQuery(user: CurrentUser, chatId?: string): Promise<WeComBotEventResponse> {
@@ -145,15 +147,14 @@ export class WeComBotService {
   private async provisionWeComMember(wecomUserid: string) {
     const orgId = process.env.WECOM_DEFAULT_ORG_ID || (await this.prisma.organization.findFirst({ orderBy: { createdAt: "asc" } }))?.id;
     if (!orgId) return null;
-    const profile = await this.fetchWeComUserProfile(wecomUserid).catch(() => null);
 
     try {
       return await this.prisma.member.create({
         data: {
           id: `wecom_${createHash("sha1").update(wecomUserid).digest("hex").slice(0, 16)}`,
           orgId,
-          displayName: profile?.displayName ?? `企业微信用户 ${wecomUserid.slice(-6)}`,
-          department: profile?.department ?? "企业微信",
+          displayName: `企业微信用户 ${wecomUserid.slice(-6)}`,
+          department: "企业微信",
           role: MemberRole.Employee,
           status: "active",
           wecomUserid,
@@ -163,25 +164,6 @@ export class WeComBotService {
     } catch {
       return this.prisma.member.findFirst({ where: { orgId, wecomUserid } });
     }
-  }
-
-  private async fetchWeComUserProfile(wecomUserid: string): Promise<{ displayName: string; department?: string } | null> {
-    const corpId = process.env.WECOM_CORP_ID;
-    const secret = process.env.WECOM_APP_SECRET;
-    if (!corpId || !secret) return null;
-
-    const tokenResponse = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${encodeURIComponent(corpId)}&corpsecret=${encodeURIComponent(secret)}`);
-    const tokenPayload = (await tokenResponse.json()) as { errcode?: number; access_token?: string };
-    if (!tokenResponse.ok || tokenPayload.errcode !== 0 || !tokenPayload.access_token) return null;
-
-    const userResponse = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=${encodeURIComponent(tokenPayload.access_token)}&userid=${encodeURIComponent(wecomUserid)}`);
-    const userPayload = (await userResponse.json()) as { errcode?: number; name?: string; department?: number[] };
-    if (!userResponse.ok || userPayload.errcode !== 0 || !userPayload.name) return null;
-
-    return {
-      displayName: userPayload.name,
-      department: userPayload.department?.join(",")
-    };
   }
 
   private async handleCheckinRecord(user: CurrentUser, text: string, attachments: WeComBotAttachment[] = [], chatId?: string): Promise<WeComBotEventResponse> {
@@ -352,7 +334,18 @@ export class WeComBotService {
     };
   }
 
-  private async handleCoachAdvice(text: string): Promise<WeComBotEventResponse> {
+  private isClearCoachContextCommand(text: string): boolean {
+    return /^(清空上下文|清除上下文|重新开始|新话题)$/i.test(text.trim());
+  }
+
+  private async handleCoachAdvice(user: CurrentUser, body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
+    const text = body.text;
+    const wecomUserid = user.wecomUserid ?? body.fromUserId;
+    if (this.isClearCoachContextCommand(text)) {
+      await this.conversations?.clearConversation({ orgId: user.orgId, wecomUserid, chatId: body.chatId });
+      return this.text(BotIntent.CoachAdvice, "已清空当前 AI 教练会话上下文。你可以直接开始一个新问题。");
+    }
+
     const reply = this.coachSafety.buildReply(text);
     if (reply.riskLevel === "escalate") {
       return {
@@ -362,12 +355,29 @@ export class WeComBotService {
       };
     }
 
-    const modelReply = await this.aiProvider.generateCoachAdvice(text);
+    const context = await this.conversations?.buildContext({ orgId: user.orgId, memberId: user.id, wecomUserid, chatId: body.chatId });
+    const messages: CoachConversationMessageInput[] = [];
+    if (context?.summary) {
+      messages.push({ role: "system", content: `以下是当前用户此前与 AI 教练的会话摘要，只用于理解追问上下文：\n${context.summary}` });
+    }
+    messages.push(...(context?.messages ?? []), { role: "user", content: text });
+    const modelReply = await this.aiProvider.generateCoachAdviceWithMessages(messages);
     const outputSafety = this.coachSafety.validateOutput(modelReply.answer);
+    const safeText = outputSafety.riskLevel === "escalate" ? outputSafety.text : modelReply.answer;
+    if (outputSafety.riskLevel !== "escalate") {
+      await this.conversations?.appendExchange({
+        orgId: user.orgId,
+        memberId: user.id,
+        wecomUserid,
+        chatId: body.chatId,
+        userText: text,
+        assistantText: safeText
+      });
+    }
     return {
       replyType: "markdown",
       intent: BotIntent.CoachAdvice,
-      text: outputSafety.riskLevel === "escalate" ? outputSafety.text : modelReply.answer
+      text: safeText
     };
   }
 

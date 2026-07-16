@@ -72,6 +72,7 @@ model Member {
   reminders     ReminderTask[]
   leaderboardEntries LeaderboardEntry[]
   coachAdviceLogs CoachAdviceLog[]
+  coachConversations CoachConversation[]
   wecomGroupMembers WeComGroupMember[]
 
   @@unique([orgId, wecomUserid])
@@ -193,6 +194,35 @@ model WeComGroupMember {
   @@unique([groupId, memberId])
   @@unique([groupId, wecomUserid])
   @@index([memberId, status])
+}
+
+model CoachConversation {
+  id            String   @id @default(cuid())
+  orgId         String
+  memberId      String
+  wecomUserid   String
+  chatId        String?
+  channel       String   @default("wecom")
+  summary       String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  member        Member   @relation(fields: [memberId], references: [id])
+  messages      CoachConversationMessage[]
+
+  @@index([orgId, chatId, wecomUserid, lastMessageAt])
+  @@index([memberId, lastMessageAt])
+}
+
+model CoachConversationMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  contentHash    String
+  createdAt      DateTime          @default(now())
+  conversation   CoachConversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
 }
 
 model ReminderTask {

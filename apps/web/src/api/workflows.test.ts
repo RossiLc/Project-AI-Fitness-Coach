@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CheckinStatus, MemberRole } from "@openfit/shared";
 import { recognizeCheckin, submitCheckin } from "./checkins";
 import { askCoach } from "./coach";
-import { bindMemberWeComUserid, getMembers, getWeComAppStatus, getWeComOAuthLoginUrl, sendWeComAppMessage, sendWeComTestMessage, syncWeComMembers } from "./wecom";
+import { bindMemberWeComUserid, getMembers, sendWeComTestMessage } from "./wecom";
 import { getLeaderboard, rebuildLeaderboard } from "./leaderboards";
-import { createActivityConfig, getAdminCheckins, invalidateCheckin, retryReminderTask, scanReminderTasks } from "./admin";
+import { createActivityConfig, getAdminCheckins, importGroupMembersByUseridRows, invalidateCheckin, retryReminderTask, scanReminderTasks } from "./admin";
 
 describe("web 工作流 API", () => {
   afterEach(() => {
@@ -60,19 +60,8 @@ describe("web 工作流 API", () => {
     expect(result.mode).toBe("mock");
   });
 
-  it("企业微信自建应用和成员映射接口可从 Web 调用", async () => {
+  it("成员映射接口可从 Web 调用", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.endsWith("/api/admin/wecom/app/status")) {
-        return response({ mode: "mock", corpIdConfigured: true, agentIdConfigured: true, secretConfigured: false, oauthReady: true, appMessageReady: false, memberSyncReady: false });
-      }
-      if (url.includes("/api/auth/wecom/login-url")) {
-        return response({ mode: "configured", state: "state_1", url: "https://open.weixin.qq.com/connect/oauth2/authorize" });
-      }
-      if (url.endsWith("/api/admin/wecom/app-message")) {
-        expect(init?.method).toBe("POST");
-        expect(init?.body).toBe(JSON.stringify({ toUserId: "wecom_user_001", text: "提醒打卡" }));
-        return response({ mode: "mock", ok: true, message: "mock 已发送" });
-      }
       if (url.endsWith("/api/admin/members")) {
         return response([]);
       }
@@ -81,22 +70,14 @@ describe("web 工作流 API", () => {
         expect(init?.body).toBe(JSON.stringify({ wecomUserid: "wecom_user_001" }));
         return response({ id: "employee_demo", mappingStatus: "bound" });
       }
-      if (url.endsWith("/api/admin/members/sync/wecom")) {
-        expect(init?.method).toBe("POST");
-        return response({ mode: "mock", totalLocalMembers: 3, created: 0, updated: 0, message: "mock" });
-      }
       throw new Error(`unexpected url: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await getWeComAppStatus();
-    await getWeComOAuthLoginUrl("state_1");
-    await sendWeComAppMessage("wecom_user_001", "提醒打卡");
     await getMembers();
     await bindMemberWeComUserid("employee_demo", "wecom_user_001");
-    await syncWeComMembers();
 
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("AI 教练请求使用 coach advice 接口", async () => {
@@ -200,6 +181,33 @@ describe("web 工作流 API", () => {
     });
 
     expect(result.id).toBe("act_new");
+  });
+
+  it("按 userid 导入群成员使用群管理接口", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe("/api/admin/groups/group_1/import-members-by-userid");
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toMatchObject({ "x-openfit-role": MemberRole.OrgAdmin });
+        expect(init?.body).toBe(
+          JSON.stringify({
+            rows: [
+              { userid: "userid_001", name: "张三", department: "技术部" },
+              { userid: "userid_002", name: "李四" }
+            ]
+          })
+        );
+        return response({ groupId: "group_1", created: [], updated: [], skipped: [] });
+      })
+    );
+
+    const result = await importGroupMembersByUseridRows("group_1", [
+      { userid: "userid_001", name: "张三", department: "技术部" },
+      { userid: "userid_002", name: "李四" }
+    ]);
+
+    expect(result.groupId).toBe("group_1");
   });
 });
 

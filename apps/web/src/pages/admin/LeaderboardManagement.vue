@@ -7,7 +7,6 @@
         <h2>排行榜管理</h2>
       </div>
       <div class="actions compact-actions">
-        <button @click="rebuild">重建当前排行榜</button>
         <button class="ghost" @click="load">刷新</button>
       </div>
     </div>
@@ -44,7 +43,6 @@
     </table>
     <div v-else class="empty">暂无当前分类的有效打卡数据。</div>
 
-    <p v-if="message" class="muted">{{ message }}</p>
     <p v-if="error" class="error">{{ error }}</p>
   </section>
 </template>
@@ -52,7 +50,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { LeaderboardCategory, LeaderboardDto, LeaderboardEntryDto } from "@openfit/shared";
-import { getLeaderboard, rebuildLeaderboard } from "../../api/leaderboards";
+import { getLeaderboard } from "../../api/leaderboards";
 import { getCurrentGroupId, onCurrentGroupChange } from "../../api/group-context";
 
 const categories: { label: string; value: LeaderboardCategory }[] = [
@@ -64,7 +62,6 @@ const categories: { label: string; value: LeaderboardCategory }[] = [
 const category = ref<LeaderboardCategory>("checkin_days");
 const groupId = ref(getCurrentGroupId());
 const leaderboard = ref<LeaderboardDto>();
-const message = ref("");
 const error = ref("");
 
 const metricLabel = computed(() => categories.find((item) => item.value === category.value)?.label ?? "指标");
@@ -77,22 +74,10 @@ async function changeCategory(next: LeaderboardCategory) {
 async function load() {
   if (!groupId.value) return;
   error.value = "";
-  message.value = "";
   try {
     leaderboard.value = await getLeaderboard(category.value, groupId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "排行榜加载失败";
-  }
-}
-
-async function rebuild() {
-  if (!groupId.value) return;
-  error.value = "";
-  try {
-    leaderboard.value = await rebuildLeaderboard(category.value, groupId.value);
-    message.value = `${metricLabel.value}排行榜已按当前群活动数据重建。`;
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "排行榜重建失败";
   }
 }
 

@@ -10,16 +10,14 @@ import { LocalGuardrailService } from "./local-guardrail.service.js";
 import { WeComBotService } from "./wecom-bot.service.js";
 import { WeComConfigService } from "./wecom-config.service.js";
 import { WeComStreamBotService } from "./wecom-stream-bot.service.js";
-import { WeComAppController } from "./wecom-app.controller.js";
-import { WeComAppService } from "./wecom-app.service.js";
 import { WeComController } from "./wecom.controller.js";
 import { WeComMessageSender } from "./wecom-message.sender.js";
 import { WeComService } from "./wecom.service.js";
 
 @Module({
   imports: [AiModule, CheckinsModule, LeaderboardsModule, MembersModule, GroupsModule],
-  controllers: [WeComController, WeComAppController],
-  providers: [WeComService, WeComMessageSender, WeComBotService, WeComStreamBotService, BotIntentRouterService, CoachSafetyService, LocalGuardrailService, WeComConfigService, WeComAppService],
-  exports: [WeComService, WeComMessageSender, WeComBotService, WeComStreamBotService, WeComConfigService, WeComAppService]
+  controllers: [WeComController],
+  providers: [WeComService, WeComMessageSender, WeComBotService, WeComStreamBotService, BotIntentRouterService, CoachSafetyService, LocalGuardrailService, WeComConfigService],
+  exports: [WeComService, WeComMessageSender, WeComBotService, WeComStreamBotService, WeComConfigService]
 })
 export class WeComModule {}

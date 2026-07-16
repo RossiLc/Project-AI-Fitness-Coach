@@ -81,7 +81,7 @@ describe("RemindersService", () => {
     expect(result.lastError).toBeNull();
   });
 
-  it("向已绑定 userid 的成员发送个人提醒并标记 sent", async () => {
+  it("个人提醒不再走企业微信应用消息，标记为 manual 并提示使用群提醒", async () => {
     const prisma = {
       reminderTask: {
         findFirst: async () => ({
@@ -91,15 +91,12 @@ describe("RemindersService", () => {
         update: async ({ data }: { data: Record<string, unknown> }) => ({ id: "rem_1", ...data })
       }
     };
-    const app = {
-      sendAppMessage: async () => ({ ok: true, mode: "mock", message: "mock 已发送" })
-    };
-    const service = new RemindersService(prisma as never, app as never);
+    const service = new RemindersService(prisma as never);
 
     const result = await service.sendPersonalReminder("rem_1");
 
-    expect(result.status).toBe(ReminderStatus.Sent);
-    expect(result.lastError).toBeNull();
+    expect(result.status).toBe(ReminderStatus.Manual);
+    expect(result.lastError).toContain("群提醒");
   });
 
   it("sends a group reminder with missing members identified by WeCom userid", async () => {
@@ -125,7 +122,7 @@ describe("RemindersService", () => {
         return { mode: "intelligent_bot" as const, ok: true, message: "sent" };
       }
     };
-    const service = new RemindersService(prisma as never, undefined, sender as never);
+    const service = new RemindersService(prisma as never, sender as never);
 
     const result = await service.sendGroupMissingCheckinReminder(new Date("2026-07-14T20:00:00+08:00"));
 
@@ -166,7 +163,7 @@ describe("RemindersService", () => {
         return { mode: "intelligent_bot" as const, ok: true, message: "sent" };
       }
     };
-    const service = new RemindersService(prisma as never, undefined, sender as never);
+    const service = new RemindersService(prisma as never, sender as never);
 
     const result = await service.sendGroupMissingCheckinReminder("group_1", new Date("2026-07-14T20:00:00+08:00"));
 

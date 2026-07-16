@@ -67,21 +67,6 @@ describe("MembersService", () => {
     expect(auditActions).toEqual(["member.bind_wecom_userid"]);
   });
 
-  it("mock 同步企业微信成员时返回预演结果，不请求外部通讯录", async () => {
-    const prisma = {
-      member: {
-        count: async () => 3
-      }
-    };
-    const service = new MembersService(prisma as never);
-
-    const result = await service.syncFromWeComMock("org_demo");
-
-    expect(result.mode).toBe("missing_config");
-    expect(result.totalLocalMembers).toBe(3);
-    expect(result.message).toContain("预留");
-  });
-
   it("filters active members who have not checked in today", async () => {
     const prisma = {
       activity: {

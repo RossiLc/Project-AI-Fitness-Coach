@@ -7,7 +7,7 @@
 单管理员 Web 后台以企业微信群作为工作空间边界，标准工作路径是：群管理 -> 选择当前群 -> 运营看板 / 成员管理 / 活动配置 / 排行榜管理。没有当前群时，后续模块不可用并展示空态。
 
 单管理员 Web 后台保留五个模块：
-- 群管理：创建待绑定群、展示绑定口令、保存企业微信智能机器人入站 `chatid`、选择当前群、通过中文名导入群成员。
+- 群管理：创建待绑定群、展示绑定口令、保存企业微信智能机器人入站 `chatid`、选择当前群、通过 Excel userid 名册导入群成员。
 - 运营看板：今日打卡人数、未打卡人数、总人数、打卡率。
 - 成员管理：成员列表、今日未打卡筛选、成员打卡明细、打卡作废/恢复、提醒未打卡。
 - 活动配置：当前活动规则配置，并作为 AI 教练活动知识来源。
@@ -225,7 +225,7 @@ AI 教练本地安全围栏选型：第一阶段不额外部署独立 guardrail 
 
 - 群机器人配置：名称、webhook 密钥引用、绑定活动、测试发送。
 - 自建应用配置：corp id、agent id、secret 引用、可信域名、token 状态。
-- 成员同步：手工导入或企业微信通讯录同步。
+- 成员同步：优先通过 Excel userid 名册导入；具备通讯录权限时可扩展企业微信通讯录同步。
 - 权限检查：展示 OAuth、userid、应用消息是否可用。
 
 ### Web 工作台信息架构草图
@@ -447,7 +447,7 @@ Open Fit 面向员工提供两个企业微信智能机器人入口：`Open Fit �
 
 ### 成员同步
 
-- MVP 支持机器人首次消息自动建档、手工导入成员或调用企业微信通讯录 API 同步。
+- MVP 支持机器人首次消息自动建档、Excel userid 名册导入成员；具备通讯录权限时可扩展企业微信通讯录 API 同步。
 - `members.wecom_userid` 是优先身份键；自动建档成员先使用企业微信 `userid` 作为 `external_id`，显示名和部门可由管理员补全或后续通讯录同步覆盖。
 
 ## AI Service Design
@@ -617,7 +617,7 @@ invalid
 ## Operations
 
 - 开发环境：Docker Compose 启动 PostgreSQL、Redis、api-server、worker、web-workbench，并挂载本地上传目录。
-- 环境变量：`DATABASE_URL`、`REDIS_URL`、`WECOM_CORP_ID`、`WECOM_APP_SECRET`、`WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`LOCAL_STORAGE_ROOT`、`LOCAL_GUARDRAIL_MAX_INPUT_LENGTH`、`LOCAL_GUARDRAIL_EXTRA_WORDS`。
+- 环境变量：`DATABASE_URL`、`REDIS_URL`、`WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`LOCAL_STORAGE_ROOT`、`LOCAL_GUARDRAIL_MAX_INPUT_LENGTH`、`LOCAL_GUARDRAIL_EXTRA_WORDS`。
 - 任务调度：BullMQ repeatable jobs 管理每日小贴士、提醒、周榜。
 - 日志：结构化 JSON 日志，包含 `request_id`、`member_id`、`activity_id`、`job_id`。
 - 监控：任务失败数、企业微信发送失败率、AI 调用失败率、打卡提交成功率。
@@ -677,3 +677,10 @@ invalid
 | AI 健康安全 | 风险样例集 | 自动 | 高风险问题拒答并建议专业帮助 | 测试输出 |
 | 隐私展示 | 页面/API 检查 | 自动/人工 | 群榜不含图片、咨询原文、未打卡名单 | 截图或测试 |
 | 知识库回写 | 文档检查 | 人工 | 长期规则写入 `docs/知识库/` | git diff |
+## AI 教练多轮会话上下文
+
+`Open Fit AI 教练` 支持短期多轮追问，采用“最近消息窗口 + 滚动摘要”的方案。服务端按 `orgId + chatId + wecomUserid` 定位群聊会话，单聊没有 `chatId` 时按 `orgId + wecomUserid` 定位，确保同一群内不同员工的健康咨询不会串上下文。
+
+会话数据由 `CoachConversation` 和 `CoachConversationMessage` 保存。每次低风险问题通过输入安全围栏后，系统读取会话摘要和最近 10 条消息，与当前问题一起传入 OpenAI-compatible `messages[]`。模型输出仍需经过输出安全围栏；只有通过输出安全围栏的回答才会写入会话历史。用户可发送“清空上下文”“清除上下文”“重新开始”或“新话题”重置当前会话。
+
+该能力只对 AI 教练机器人生效。打卡助手不读取 AI 教练上下文，也不把打卡内容作为咨询上下文，避免历史聊天影响打卡入库。

@@ -52,44 +52,46 @@ describe("GroupsService", () => {
     expect(updates[0]).toMatchObject({ chatId: "chat_abc", status: "active" });
   });
 
-  it("imports pasted Chinese names by matching WeCom directory members", async () => {
-    const createdMembers: Array<Record<string, unknown>> = [];
-    const createdGroupMembers: Array<Record<string, unknown>> = [];
+  it("imports Excel rows by userid and upserts existing members", async () => {
+    const memberUpdates: Array<Record<string, unknown>> = [];
+    const memberCreates: Array<Record<string, unknown>> = [];
+    const groupMemberUpserts: Array<Record<string, unknown>> = [];
     const prisma = {
       weComGroup: {
         findFirst: async () => ({ id: "group_1", orgId: "org_demo" })
       },
       member: {
-        findFirst: async ({ where }: { where: { orgId: string; wecomUserid?: string } }) => (where.wecomUserid === "userid_zs" ? { id: "member_existing", orgId: "org_demo", displayName: "张三", wecomUserid: "userid_zs" } : null),
-        update: async ({ data }: { data: Record<string, unknown> }) => ({ id: "member_existing", orgId: "org_demo", ...data }),
+        findFirst: async ({ where }: { where: { orgId: string; wecomUserid?: string } }) =>
+          where.wecomUserid === "userid_existing" ? { id: "member_existing", orgId: "org_demo", displayName: "旧姓名", wecomUserid: "userid_existing" } : null,
+        update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          memberUpdates.push({ where, data });
+          return { id: where.id, orgId: "org_demo", ...data };
+        },
         create: async ({ data }: { data: Record<string, unknown> }) => {
-          createdMembers.push(data);
+          memberCreates.push(data);
           return { id: data.id ?? "member_new", ...data };
         }
       },
       weComGroupMember: {
-        upsert: async ({ create }: { create: Record<string, unknown> }) => {
-          createdGroupMembers.push(create);
-          return create;
+        upsert: async (args: Record<string, unknown>) => {
+          groupMemberUpserts.push(args);
+          return args;
         }
       }
     };
-    const directory = {
-      listMembers: async () => [
-        { userid: "userid_zs", name: "张三", department: "技术部" },
-        { userid: "userid_ls", name: "李四", department: "运营部" },
-        { userid: "userid_ww_a", name: "王五", department: "产品部" },
-        { userid: "userid_ww_b", name: "王五", department: "技术部" }
-      ]
-    };
-    const service = new GroupsService(prisma as never, directory as never);
+    const service = new GroupsService(prisma as never);
 
-    const result = await service.importMembersByNames("org_demo", "group_1", "张三;李四;王五;不存在;");
+    const result = await service.importMembersByUseridRows("org_demo", "group_1", [
+      { userid: "userid_existing", name: "张三", department: "技术部" },
+      { userid: "userid_new", name: "李四", department: "运营部" },
+      { userid: "", name: "无 userid" }
+    ]);
 
-    expect(result.matched).toHaveLength(2);
-    expect(result.duplicates).toEqual([{ name: "王五", candidates: expect.arrayContaining([expect.objectContaining({ userid: "userid_ww_a" }), expect.objectContaining({ userid: "userid_ww_b" })]) }]);
-    expect(result.notFound).toEqual(["不存在"]);
-    expect(createdMembers[0]).toMatchObject({ displayName: "李四", wecomUserid: "userid_ls" });
-    expect(createdGroupMembers).toHaveLength(2);
+    expect(result.updated).toEqual([{ userid: "userid_existing", name: "张三", memberId: "member_existing", department: "技术部" }]);
+    expect(result.created).toEqual([{ userid: "userid_new", name: "李四", memberId: expect.stringMatching(/^wecom_/) as unknown as string, department: "运营部" }]);
+    expect(result.skipped).toEqual([{ rowNumber: 4, reason: "缺少 userid" }]);
+    expect(memberUpdates[0]).toMatchObject({ where: { id: "member_existing" }, data: { displayName: "张三", department: "技术部", status: "active" } });
+    expect(memberCreates[0]).toMatchObject({ displayName: "李四", department: "运营部", wecomUserid: "userid_new", status: "active" });
+    expect(groupMemberUpserts).toHaveLength(2);
   });
 });

@@ -5,16 +5,10 @@ import { join } from "node:path";
 import { BotIntent, CheckinStatus, MemberRole, type CurrentUser } from "@openfit/shared";
 import { RuleRecognizerService } from "../checkins/rule-recognizer.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
+import { CoachConversationService } from "../ai/coach-conversation.service.js";
 import { BotIntentRouterService } from "./bot-intent-router.service.js";
 import { CoachSafetyService } from "./coach-safety.service.js";
 import { WeComBotService } from "./wecom-bot.service.js";
-
-function response(payload: unknown, ok = true) {
-  return {
-    ok,
-    json: async () => payload
-  };
-}
 
 function createService(options: { modelAnswer?: string; imageRecognition?: Record<string, unknown>; imageParseError?: Error; boundGroup?: Record<string, unknown> | null } = {}) {
   const user: CurrentUser = {
@@ -30,6 +24,11 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
   const groupObservations: unknown[] = [];
   const imageParses: unknown[] = [];
   const coachAdviceQuestions: string[] = [];
+  const coachAdviceMessages: Array<Array<{ role: string; content: string }>> = [];
+  const coachConversations: Array<Record<string, any>> = [];
+  const coachConversationMessages: Array<Record<string, any>> = [];
+  let coachConversationSeq = 0;
+  let coachConversationMessageSeq = 0;
   const prisma = {
     member: {
       findFirst: async ({ where }: { where: { wecomUserid?: string } }) =>
@@ -89,6 +88,54 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
         };
       }
     },
+    coachConversation: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        coachConversations.find((conversation) =>
+          Object.entries(where).every(([key, value]) => (value === undefined ? true : conversation[key] === value))
+        ) ?? null,
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const conversation = { id: `conv_${++coachConversationSeq}`, ...data, createdAt: new Date(), lastMessageAt: data.lastMessageAt ?? new Date() };
+        coachConversations.push(conversation);
+        return conversation;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const conversation = coachConversations.find((item) => item.id === where.id);
+        if (!conversation) throw new Error("conversation not found");
+        Object.assign(conversation, data);
+        return conversation;
+      },
+      deleteMany: async ({ where }: { where: Record<string, unknown> }) => {
+        const ids = coachConversations.filter((conversation) => Object.entries(where).every(([key, value]) => conversation[key] === value)).map((conversation) => conversation.id);
+        for (let index = coachConversations.length - 1; index >= 0; index -= 1) {
+          if (ids.includes(coachConversations[index].id)) coachConversations.splice(index, 1);
+        }
+        return { count: ids.length };
+      }
+    },
+    coachConversationMessage: {
+      findMany: async ({ where, orderBy, take }: { where: { conversationId: string }; orderBy: { createdAt: "asc" | "desc" }; take?: number }) => {
+        const rows = coachConversationMessages.filter((message) => message.conversationId === where.conversationId);
+        rows.sort((left, right) => {
+          const diff = left.createdAt.getTime() - right.createdAt.getTime();
+          return orderBy.createdAt === "desc" ? -diff : diff;
+        });
+        return typeof take === "number" ? rows.slice(0, take) : rows;
+      },
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const message = { id: `conv_msg_${++coachConversationMessageSeq}`, ...data, createdAt: new Date(coachConversationMessageSeq) };
+        coachConversationMessages.push(message);
+        return message;
+      },
+      count: async ({ where }: { where: { conversationId: string } }) => coachConversationMessages.filter((message) => message.conversationId === where.conversationId).length,
+      deleteMany: async ({ where }: { where: { conversationId: string; createdAt?: { lt: Date } } }) => {
+        const before = coachConversationMessages.length;
+        for (let index = coachConversationMessages.length - 1; index >= 0; index -= 1) {
+          const message = coachConversationMessages[index];
+          if (message.conversationId === where.conversationId && (!where.createdAt?.lt || message.createdAt < where.createdAt.lt)) coachConversationMessages.splice(index, 1);
+        }
+        return { count: before - coachConversationMessages.length };
+      }
+    }
   };
   const aiParser = {
     parseImage: async (input: unknown) => {
@@ -116,6 +163,16 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
         model: "gpt-5.5",
         source: "model"
       };
+    },
+    generateCoachAdviceWithMessages: async (messages: Array<{ role: string; content: string }>) => {
+      coachAdviceMessages.push(messages);
+      const last = messages.at(-1)?.content ?? "";
+      return {
+        riskLevel: "normal",
+        answer: options.modelAnswer ?? `模型回复：${last}`,
+        model: "gpt-5.5",
+        source: "model"
+      };
     }
   };
   return {
@@ -127,14 +184,15 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
       observeMemberByChat: async (...args: unknown[]) => {
         groupObservations.push(args);
       }
-    } as never),
+    } as never, new CoachConversationService(prisma as never)),
     createdCheckins,
     createdAttachments,
     createdMembers,
     groupBindings,
     groupObservations,
     imageParses,
-    coachAdviceQuestions
+    coachAdviceQuestions,
+    coachAdviceMessages
   };
 }
 
@@ -221,32 +279,6 @@ describe("WeComBotService", () => {
     expect(createdCheckins).toHaveLength(0);
   });
 
-  it("uses WeCom user detail API to enrich auto-provisioned member profile", async () => {
-    vi.stubEnv("WECOM_CORP_ID", "corp_demo");
-    vi.stubEnv("WECOM_APP_SECRET", "secret_demo");
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes("/cgi-bin/gettoken")) return response({ errcode: 0, access_token: "token_demo" });
-      if (url.includes("/cgi-bin/user/get")) {
-        return response({ errcode: 0, userid: "wecom_real_002", name: "张三", department: [1, 2] });
-      }
-      throw new Error(`unexpected url: ${url}`);
-    });
-    vi.stubGlobal(
-      "fetch",
-      fetchMock
-    );
-    const { service, createdMembers } = createService();
-
-    await service.handleEvent({ messageId: "msg_user_detail", fromUserId: "wecom_real_002", text: "玉米多少大卡热量", botRole: "coach" } as never);
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(createdMembers[0]).toMatchObject({
-      displayName: "张三",
-      department: "1,2",
-      wecomUserid: "wecom_real_002"
-    });
-  });
-
   it("缺少企业微信 userid 时拒绝处理，避免匿名入库", async () => {
     const { service, createdMembers, createdCheckins } = createService();
 
@@ -289,13 +321,45 @@ describe("WeComBotService", () => {
   });
 
   it("AI 教练低风险咨询调用 AI Provider 生成回复", async () => {
-    const { service, coachAdviceQuestions } = createService();
+    const { service, coachAdviceMessages } = createService();
 
     const result = await service.handleEvent({ messageId: "msg_provider", fromUserId: "wecom_user_001", text: "玉米多少大卡热量", botRole: "coach" } as never);
 
     expect(result.intent).toBe(BotIntent.CoachAdvice);
     expect(result.text).toContain("模型回复：玉米多少大卡热量");
-    expect(coachAdviceQuestions).toEqual(["玉米多少大卡热量"]);
+    expect(coachAdviceMessages[0].at(-1)).toEqual({ role: "user", content: "玉米多少大卡热量" });
+  });
+
+  it("AI 教练追问会携带同一群同一用户的上一轮上下文", async () => {
+    const { service, coachAdviceMessages } = createService();
+
+    await service.handleEvent({ messageId: "msg_context_a", fromUserId: "wecom_user_001", chatId: "group_1", text: "我想做一周减脂计划", botRole: "coach" } as never);
+    await service.handleEvent({ messageId: "msg_context_b", fromUserId: "wecom_user_001", chatId: "group_1", text: "那我每天晚上只有30分钟呢", botRole: "coach" } as never);
+
+    expect(coachAdviceMessages[1].map((message) => message.content)).toContain("我想做一周减脂计划");
+    expect(coachAdviceMessages[1].map((message) => message.content)).toContain("模型回复：我想做一周减脂计划");
+    expect(coachAdviceMessages[1].at(-1)).toEqual({ role: "user", content: "那我每天晚上只有30分钟呢" });
+  });
+
+  it("AI 教练上下文按同一群内不同用户隔离", async () => {
+    const { service, coachAdviceMessages } = createService();
+
+    await service.handleEvent({ messageId: "msg_context_user_a", fromUserId: "wecom_user_001", chatId: "group_1", text: "我想减脂", botRole: "coach" } as never);
+    await service.handleEvent({ messageId: "msg_context_user_b", fromUserId: "wecom_real_002", chatId: "group_1", text: "那我应该怎么吃", botRole: "coach" } as never);
+
+    expect(coachAdviceMessages[1].map((message) => message.content)).not.toContain("我想减脂");
+    expect(coachAdviceMessages[1].at(-1)).toEqual({ role: "user", content: "那我应该怎么吃" });
+  });
+
+  it("AI 教练支持清空当前会话上下文", async () => {
+    const { service, coachAdviceMessages } = createService();
+
+    await service.handleEvent({ messageId: "msg_context_before_clear", fromUserId: "wecom_user_001", chatId: "group_1", text: "我想减脂", botRole: "coach" } as never);
+    const clearResult = await service.handleEvent({ messageId: "msg_context_clear", fromUserId: "wecom_user_001", chatId: "group_1", text: "清空上下文", botRole: "coach" } as never);
+    await service.handleEvent({ messageId: "msg_context_after_clear", fromUserId: "wecom_user_001", chatId: "group_1", text: "那我应该怎么吃", botRole: "coach" } as never);
+
+    expect(clearResult.text).toContain("已清空");
+    expect(coachAdviceMessages.at(-1)?.map((message) => message.content)).not.toContain("我想减脂");
   });
 
   it("AI 教练查询活动规则时返回后台维护的活动内容", async () => {
@@ -532,7 +596,7 @@ describe("WeComBotService", () => {
   });
 
   it("AI 教练输出侧命中密钥泄漏时替换为安全提示", async () => {
-    const { service, coachAdviceQuestions } = createService({ modelAnswer: "内部 token 是 sk-test-abcdefghijklmnopqrstuvwxyz123456" });
+    const { service, coachAdviceMessages } = createService({ modelAnswer: "内部 token 是 sk-test-abcdefghijklmnopqrstuvwxyz123456" });
 
     const result = await service.handleEvent({
       messageId: "msg_output_secret",
@@ -544,6 +608,6 @@ describe("WeComBotService", () => {
     expect(result.intent).toBe(BotIntent.CoachAdvice);
     expect(result.text).toContain("安全策略");
     expect(result.text).not.toContain("sk-test");
-    expect(coachAdviceQuestions).toEqual(["玉米多少大卡热量"]);
+    expect(coachAdviceMessages[0].at(-1)).toEqual({ role: "user", content: "玉米多少大卡热量" });
   });
 });

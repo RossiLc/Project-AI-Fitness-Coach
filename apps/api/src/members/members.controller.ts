@@ -23,9 +23,4 @@ export class MembersController {
   bindWeComUserid(@CurrentUserDecorator() user: CurrentUser, @Param("id") id: string, @Body() body: BindWeComUseridRequest) {
     return this.members.bindWeComUserid(user.id, id, body.wecomUserid);
   }
-
-  @Post("sync/wecom")
-  sync(@CurrentUserDecorator() user: CurrentUser) {
-    return this.members.syncFromWeComMock(user.orgId);
-  }
 }

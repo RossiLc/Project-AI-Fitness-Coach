@@ -5,7 +5,8 @@ import type {
   CreateActivityConfigRequest,
   DashboardSummary,
   GroupMissingCheckinReminderResult,
-  ImportGroupMembersByNameResult,
+  ImportGroupMemberByUseridRow,
+  ImportGroupMembersByUseridResult,
   MemberCheckinHistoryDto,
   MemberDto,
   ReminderTaskDto,
@@ -31,10 +32,10 @@ export function createGroup(name: string) {
   });
 }
 
-export function importGroupMembers(groupId: string, namesText: string) {
-  return apiFetch<ImportGroupMembersByNameResult>(`/api/admin/groups/${encodeURIComponent(groupId)}/import-members`, {
+export function importGroupMembersByUseridRows(groupId: string, rows: ImportGroupMemberByUseridRow[]) {
+  return apiFetch<ImportGroupMembersByUseridResult>(`/api/admin/groups/${encodeURIComponent(groupId)}/import-members-by-userid`, {
     method: "POST",
-    body: JSON.stringify({ namesText })
+    body: JSON.stringify({ rows })
   });
 }
 

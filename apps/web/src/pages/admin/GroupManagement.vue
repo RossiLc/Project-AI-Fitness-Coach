@@ -41,17 +41,21 @@
 
     <div v-if="currentGroup" class="member-import">
       <h3>导入当前群成员</h3>
-      <p class="muted">支持从群里复制中文名后粘贴，例如：张三;李四;。系统会用企业微信通讯录匹配 userid，重名和未找到会显示出来。</p>
-      <textarea v-model="namesText" rows="6" placeholder="张三;李四;"></textarea>
+      <p class="muted">上传企业微信成员 Excel，表头需包含 userId、中文名称、部门。userid 相同会覆盖姓名和部门，新 userid 会新增成员。</p>
+      <input ref="fileInput" type="file" accept=".xlsx,.xls" @change="selectMemberFile" />
       <div class="actions">
-        <button @click="importMembers">解析并导入</button>
+        <button :disabled="!pendingRows.length" @click="importMembersByFile">导入成员</button>
       </div>
+      <p v-if="pendingRows.length" class="muted">已解析 {{ pendingRows.length }} 条成员数据。</p>
     </div>
 
-    <div v-if="importResult" class="import-result">
-      <p><strong>已匹配：</strong>{{ importResult.matched.length }} 人</p>
-      <p><strong>重名待确认：</strong>{{ importResult.duplicates.map((item) => item.name).join("、") || "无" }}</p>
-      <p><strong>未找到：</strong>{{ importResult.notFound.join("、") || "无" }}</p>
+    <div v-if="useridImportResult" class="import-result">
+      <p><strong>新增：</strong>{{ useridImportResult.created.length }} 人</p>
+      <p><strong>覆盖更新：</strong>{{ useridImportResult.updated.length }} 人</p>
+      <p><strong>跳过：</strong>{{ useridImportResult.skipped.length }} 行</p>
+      <p v-if="useridImportResult.skipped.length" class="muted">
+        {{ useridImportResult.skipped.map((item) => `第 ${item.rowNumber} 行：${item.reason}`).join("；") }}
+      </p>
     </div>
 
     <p v-if="message" class="muted">{{ message }}</p>
@@ -61,15 +65,17 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { ImportGroupMembersByNameResult, WeComGroupDto } from "@openfit/shared";
-import { createGroup, getGroups, importGroupMembers } from "../../api/admin";
+import type { ImportGroupMemberByUseridRow, ImportGroupMembersByUseridResult, WeComGroupDto } from "@openfit/shared";
+import { createGroup, getGroups, importGroupMembersByUseridRows } from "../../api/admin";
 import { getCurrentGroupId, setCurrentGroupId } from "../../api/group-context";
+import { parseGroupMembersFromWorkbook } from "./group-member-import";
 
 const groups = ref<WeComGroupDto[]>([]);
 const newName = ref("");
-const namesText = ref("");
 const currentGroupId = ref(getCurrentGroupId());
-const importResult = ref<ImportGroupMembersByNameResult | null>(null);
+const pendingRows = ref<ImportGroupMemberByUseridRow[]>([]);
+const useridImportResult = ref<ImportGroupMembersByUseridResult | null>(null);
+const fileInput = ref<HTMLInputElement>();
 const message = ref("");
 const error = ref("");
 
@@ -107,13 +113,34 @@ function select(groupId: string) {
   setCurrentGroupId(groupId);
 }
 
-async function importMembers() {
+async function selectMemberFile(event: Event) {
+  error.value = "";
+  message.value = "";
+  useridImportResult.value = null;
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  try {
+    pendingRows.value = await parseGroupMembersFromWorkbook(await file.arrayBuffer());
+    if (!pendingRows.value.length) error.value = "未解析到成员数据，请确认表头包含 userId 和中文名称";
+  } catch (err) {
+    pendingRows.value = [];
+    error.value = err instanceof Error ? err.message : "Excel 解析失败";
+  }
+}
+
+async function importMembersByFile() {
   if (!currentGroupId.value) return;
   error.value = "";
   message.value = "";
+  if (!pendingRows.value.length) {
+    error.value = "请先选择成员 Excel 文件";
+    return;
+  }
   try {
-    importResult.value = await importGroupMembers(currentGroupId.value, namesText.value);
-    message.value = `导入完成：已匹配 ${importResult.value.matched.length} 人。`;
+    useridImportResult.value = await importGroupMembersByUseridRows(currentGroupId.value, pendingRows.value);
+    message.value = `导入完成：新增 ${useridImportResult.value.created.length} 人，覆盖更新 ${useridImportResult.value.updated.length} 人。`;
+    pendingRows.value = [];
+    if (fileInput.value) fileInput.value.value = "";
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "成员导入失败";

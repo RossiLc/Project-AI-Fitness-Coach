@@ -1,13 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import {
   CheckinStatus,
   MemberRole,
   type AdminCheckinDto,
   type CurrentUser,
   type MemberCheckinHistoryDto,
-  type MemberDto,
-  type SyncWeComMembersResponse
+  type MemberDto
 } from "@openfit/shared";
 import { Prisma } from "@prisma/client";
 import { ApiException } from "../common/api-response.js";
@@ -55,10 +53,7 @@ interface ListMembersOptions {
 
 @Injectable()
 export class MembersService {
-  constructor(
-    @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(ConfigService) private readonly config?: ConfigService
-  ) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(orgId: string, options: ListMembersOptions = {}): Promise<MemberDto[]> {
     const members = options.groupId
@@ -137,67 +132,6 @@ export class MembersService {
       role: member.role as MemberRole,
       wecomUserid: member.wecomUserid ?? undefined
     };
-  }
-
-  async syncFromWeComMock(orgId: string): Promise<SyncWeComMembersResponse> {
-    if (this.config?.get<string>("WECOM_CORP_ID") && this.config?.get<string>("WECOM_APP_SECRET")) {
-      return this.syncFromWeComApi(orgId);
-    }
-    const totalLocalMembers = await this.prisma.member.count({ where: { orgId } });
-    return {
-      mode: "missing_config",
-      totalLocalMembers,
-      created: 0,
-      updated: 0,
-      message: "企业微信通讯录同步入口已预留；当前 mock 模式只检查本地成员与 userid 映射。"
-    };
-  }
-
-  private async syncFromWeComApi(orgId: string): Promise<SyncWeComMembersResponse> {
-    const token = await this.fetchAccessToken();
-    const response = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token=${encodeURIComponent(token)}&department_id=1&fetch_child=1`);
-    const payload = (await response.json()) as { errcode?: number; errmsg?: string; userlist?: Array<{ userid: string; name?: string; department?: number[] }> };
-    if (!response.ok || payload.errcode !== 0) throw new Error(`企业微信通讯录同步失败：${payload.errmsg ?? response.status}`);
-
-    let created = 0;
-    let updated = 0;
-    for (const item of payload.userlist ?? []) {
-      const existing = await this.prisma.member.findFirst({ where: { orgId, wecomUserid: item.userid } });
-      if (existing) {
-        await this.prisma.member.update({
-          where: { id: existing.id },
-          data: { displayName: item.name ?? existing.displayName, status: "active" }
-        });
-        updated += 1;
-      } else {
-        await this.prisma.member.create({
-          data: {
-            id: `wecom_${item.userid}`,
-            orgId,
-            displayName: item.name ?? item.userid,
-            department: item.department?.join(","),
-            role: MemberRole.Employee,
-            status: "active",
-            wecomUserid: item.userid,
-            externalId: item.userid
-          }
-        });
-        created += 1;
-      }
-    }
-
-    const totalLocalMembers = await this.prisma.member.count({ where: { orgId } });
-    return { mode: "wecom_api", totalLocalMembers, created, updated, message: "企业微信通讯录同步完成。" };
-  }
-
-  private async fetchAccessToken() {
-    const corpId = this.config?.get<string>("WECOM_CORP_ID");
-    const secret = this.config?.get<string>("WECOM_APP_SECRET");
-    if (!corpId || !secret) throw new Error("缺少 WECOM_CORP_ID 或 WECOM_APP_SECRET");
-    const response = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${encodeURIComponent(corpId)}&corpsecret=${encodeURIComponent(secret)}`);
-    const payload = (await response.json()) as { errcode?: number; errmsg?: string; access_token?: string };
-    if (!response.ok || payload.errcode !== 0 || !payload.access_token) throw new Error(`企业微信 access_token 获取失败：${payload.errmsg ?? response.status}`);
-    return payload.access_token;
   }
 }
 

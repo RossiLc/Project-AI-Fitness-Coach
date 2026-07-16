@@ -2,9 +2,11 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /workspace
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ARG COREPACK_REGISTRY=https://registry.npmmirror.com
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
-ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+ENV COREPACK_NPM_REGISTRY=${COREPACK_REGISTRY}
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY}
 ENV VITE_API_BASE_URL=
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./

@@ -45,6 +45,35 @@ describe("AiProviderService", () => {
     expect(result.answer).toContain("模型建议");
   });
 
+  it("多轮教练咨询会把历史消息和当前问题一起发送给模型", async () => {
+    vi.stubEnv("AI_BASE_URL", "https://api.example.test/v1");
+    vi.stubEnv("AI_API_KEY", "sk-test");
+    vi.stubEnv("AI_MODEL", "gpt-5.5");
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "连续回复" } }] })
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const service = new AiProviderService(new AiConfigService());
+
+    await service.generateCoachAdviceWithMessages([
+      { role: "system", content: "活动规则摘要" },
+      { role: "user", content: "我想减脂" },
+      { role: "assistant", content: "建议先保持轻中强度运动" },
+      { role: "user", content: "那晚上只有30分钟呢" }
+    ]);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { messages: Array<{ role: string; content: string }> };
+    expect(body.messages.map((message) => message.content)).toEqual([
+      expect.stringContaining("AI"),
+      "活动规则摘要",
+      "我想减脂",
+      "建议先保持轻中强度运动",
+      "那晚上只有30分钟呢"
+    ]);
+  });
+
   it("教练咨询模型调用失败时返回模型错误状态，不伪造 AI 回复", async () => {
     vi.stubEnv("AI_BASE_URL", "https://api.example.test/v1");
     vi.stubEnv("AI_API_KEY", "sk-test");
