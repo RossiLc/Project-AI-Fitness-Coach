@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
 import { MemberRole, type DashboardSummary } from "@openfit/shared";
 import { AllowRoles } from "../auth/role-guard.factory.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -9,13 +9,13 @@ export class DashboardController {
 
   @Get("summary")
   @UseGuards(AllowRoles(MemberRole.OrgAdmin))
-  async getSummary(): Promise<DashboardSummary> {
-    const activeActivity = await this.prisma.activity.findFirst({ where: { status: "active" } });
+  async getSummary(@Query("groupId") groupId?: string): Promise<DashboardSummary> {
+    const activeActivity = await this.prisma.activity.findFirst({ where: { status: "active", ...(groupId ? { groupId } : {}) } });
     if (!activeActivity) {
       return { todayCheckinCount: 0, checkinRate: 0, missingCount: 0, totalMemberCount: 0, totalDurationMin: 0, pendingIssueCount: 0 };
     }
 
-    const memberCount = await this.prisma.member.count({ where: { orgId: activeActivity.orgId, status: "active" } });
+    const memberCount = groupId ? await this.prisma.weComGroupMember.count({ where: { groupId, status: "active" } }) : await this.prisma.member.count({ where: { orgId: activeActivity.orgId, status: "active" } });
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);

@@ -54,6 +54,7 @@ model Organization {
   members     Member[]
   activities  Activity[]
   wecomConfigs WeComConfig[]
+  wecomGroups WeComGroup[]
 }
 
 model Member {
@@ -71,6 +72,7 @@ model Member {
   reminders     ReminderTask[]
   leaderboardEntries LeaderboardEntry[]
   coachAdviceLogs CoachAdviceLog[]
+  wecomGroupMembers WeComGroupMember[]
 
   @@unique([orgId, wecomUserid])
   @@index([orgId, role])
@@ -79,6 +81,7 @@ model Member {
 model Activity {
   id           String          @id @default(cuid())
   orgId        String
+  groupId      String?
   name         String
   startAt      DateTime
   endAt        DateTime
@@ -87,11 +90,13 @@ model Activity {
   reminderTime String          @default("20:00")
   createdAt    DateTime        @default(now())
   organization Organization    @relation(fields: [orgId], references: [id])
+  group        WeComGroup?     @relation(fields: [groupId], references: [id])
   checkins     Checkin[]
   reminders    ReminderTask[]
   leaderboardSnapshots LeaderboardSnapshot[]
 
   @@index([orgId, status])
+  @@index([groupId, status])
 }
 
 model Checkin {
@@ -148,12 +153,46 @@ model WeComConfig {
   id               String       @id @default(cuid())
   orgId            String
   botName          String
-  webhookSecretRef String?
-  webhookUrl       String?
   agentId          String?
-  status           String       @default("mock")
+  status           String       @default("pending")
   createdAt        DateTime     @default(now())
   organization     Organization @relation(fields: [orgId], references: [id])
+}
+
+model WeComGroup {
+  id           String       @id @default(cuid())
+  orgId        String
+  name         String
+  chatId       String?      @unique
+  bindCode     String       @unique
+  status       String       @default("pending_binding")
+  lastSeenAt   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+  organization Organization @relation(fields: [orgId], references: [id])
+  members      WeComGroupMember[]
+  activities   Activity[]
+
+  @@index([orgId, status])
+  @@index([orgId, lastSeenAt])
+}
+
+model WeComGroupMember {
+  id           String      @id @default(cuid())
+  groupId      String
+  memberId     String
+  wecomUserid  String
+  displayName  String
+  department   String?
+  source       String      @default("observed")
+  status       String      @default("active")
+  verifiedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  group        WeComGroup  @relation(fields: [groupId], references: [id])
+  member       Member      @relation(fields: [memberId], references: [id])
+
+  @@unique([groupId, memberId])
+  @@unique([groupId, wecomUserid])
+  @@index([memberId, status])
 }
 
 model ReminderTask {

@@ -21,7 +21,7 @@
 #### Scenario: 企业微信权限尚未完整开通
 
 - **WHEN** 企业微信自建应用 OAuth、userid 或应用消息权限尚未可用
-- **THEN** 第一阶段必须仍能通过 mock 模式演示流程，并在配置真实群机器人 webhook 后发送测试群消息
+- **THEN** 第一阶段必须能在配置真实智能机器人 Bot ID/Secret 后接收入站消息，并在捕获目标群 `chatid` 后通过长连接发送测试群消息
 
 ### Requirement: 阶段边界防误判
 

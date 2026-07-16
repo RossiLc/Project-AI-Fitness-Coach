@@ -28,6 +28,7 @@ function createClient() {
       connect: vi.fn(),
       disconnect: vi.fn(),
       replyStream: vi.fn(),
+      sendMessage: vi.fn(),
       downloadFile: vi.fn(async () => ({ buffer: Buffer.from("wecom-image"), filename: "downloaded.jpg" }))
     } satisfies WeComStreamBotClient
   };
@@ -40,7 +41,6 @@ describe("WeComStreamBotService", () => {
 
   it("stream 模式下为打卡助手和 AI 教练分别建立长连接", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("WECOM_MOCK_MODE", "false");
     vi.stubEnv("WECOM_CHECKIN_BOT_ID", "checkin-bot");
     vi.stubEnv("WECOM_CHECKIN_BOT_SECRET", "checkin-secret");
     vi.stubEnv("WECOM_COACH_BOT_ID", "coach-bot");
@@ -61,7 +61,6 @@ describe("WeComStreamBotService", () => {
 
   it("将 SDK 文本消息归一化后交给现有机器人业务服务处理并回复", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("WECOM_MOCK_MODE", "false");
     vi.stubEnv("WECOM_CHECKIN_BOT_ID", "checkin-bot");
     vi.stubEnv("WECOM_CHECKIN_BOT_SECRET", "checkin-secret");
     const fakeBot = new FakeWeComBotService();
@@ -94,7 +93,6 @@ describe("WeComStreamBotService", () => {
 
   it("将 SDK 图片消息归一化为图片附件", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("WECOM_MOCK_MODE", "false");
     vi.stubEnv("WECOM_CHECKIN_BOT_ID", "checkin-bot");
     vi.stubEnv("WECOM_CHECKIN_BOT_SECRET", "checkin-secret");
     const fakeBot = new FakeWeComBotService();
@@ -130,7 +128,6 @@ describe("WeComStreamBotService", () => {
 
   it("test 或 mock 模式不会建立长连接", async () => {
     vi.stubEnv("NODE_ENV", "test");
-    vi.stubEnv("WECOM_MOCK_MODE", "false");
     vi.stubEnv("WECOM_CHECKIN_BOT_ID", "checkin-bot");
     vi.stubEnv("WECOM_CHECKIN_BOT_SECRET", "checkin-secret");
     const factory: WeComStreamBotClientFactory = vi.fn(() => createClient().client);
@@ -138,5 +135,23 @@ describe("WeComStreamBotService", () => {
     await new WeComStreamBotService(new WeComConfigService(), new FakeWeComBotService() as never, factory).onModuleInit();
 
     expect(factory).not.toHaveBeenCalled();
+  });
+
+  it("through checkin bot long connection sends proactive markdown to a known group chat", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("WECOM_CHECKIN_BOT_ID", "checkin-bot");
+    vi.stubEnv("WECOM_CHECKIN_BOT_SECRET", "checkin-secret");
+    const { client } = createClient();
+    const service = new WeComStreamBotService(new WeComConfigService(), new FakeWeComBotService() as never, () => client);
+    await service.onModuleInit();
+
+    const result = await service.sendMarkdown("checkin", "chat-1", "Open Fit reminder");
+
+    expect(client.sendMessage).toHaveBeenCalledWith("chat-1", {
+      msgtype: "markdown",
+      markdown: { content: "Open Fit reminder" }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.mode).toBe("intelligent_bot");
   });
 });

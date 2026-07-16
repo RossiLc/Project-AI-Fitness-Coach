@@ -77,7 +77,7 @@ describe("MembersService", () => {
 
     const result = await service.syncFromWeComMock("org_demo");
 
-    expect(result.mode).toBe("mock");
+    expect(result.mode).toBe("missing_config");
     expect(result.totalLocalMembers).toBe(3);
     expect(result.message).toContain("预留");
   });

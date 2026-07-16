@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, Post, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { MemberRole, type ReminderTaskDto } from "@openfit/shared";
 import { AllowRoles } from "../auth/role-guard.factory.js";
 import { RemindersService } from "./reminders.service.js";
@@ -27,8 +27,8 @@ export class RemindersController {
 
   @Post("group-missing-checkins")
   @UseGuards(AllowRoles(MemberRole.OrgAdmin))
-  sendGroupMissingCheckins() {
-    return this.reminders.sendGroupMissingCheckinReminder();
+  sendGroupMissingCheckins(@Query("groupId") groupId?: string) {
+    return this.reminders.sendGroupMissingCheckinReminder(groupId);
   }
 
   @Post(":id/retry")

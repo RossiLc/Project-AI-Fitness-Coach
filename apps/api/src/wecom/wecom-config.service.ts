@@ -1,8 +1,6 @@
 import { Injectable } from "@nestjs/common";
 
 export interface WeComRuntimeConfig {
-  mockMode: boolean;
-  groupBotWebhookUrl: string;
   intelligentBotId: string;
   checkinBotId: string;
   checkinBotSecret: string;
@@ -18,8 +16,6 @@ export interface WeComRuntimeConfig {
 export class WeComConfigService {
   getConfig(): WeComRuntimeConfig {
     return {
-      mockMode: process.env.WECOM_MOCK_MODE !== "false",
-      groupBotWebhookUrl: process.env.WECOM_BOT_WEBHOOK_URL ?? "",
       intelligentBotId: process.env.WECOM_INTELLIGENT_BOT_ID ?? "",
       checkinBotId: process.env.WECOM_CHECKIN_BOT_ID ?? "",
       checkinBotSecret: process.env.WECOM_CHECKIN_BOT_SECRET ?? "",

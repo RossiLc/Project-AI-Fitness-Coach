@@ -1,12 +1,14 @@
 import type { RouteRecordRaw } from "vue-router";
 import Dashboard from "../pages/admin/Dashboard.vue";
 import ActivityConfig from "../pages/admin/ActivityConfig.vue";
+import GroupManagement from "../pages/admin/GroupManagement.vue";
 import LeaderboardManagement from "../pages/admin/LeaderboardManagement.vue";
 import MemberDetail from "../pages/admin/MemberDetail.vue";
 import Members from "../pages/admin/Members.vue";
 
 export const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/admin/dashboard" },
+  { path: "/admin/groups", component: GroupManagement },
   { path: "/admin/dashboard", component: Dashboard },
   { path: "/admin/members", component: Members },
   { path: "/admin/members/:id", component: MemberDetail, props: true },

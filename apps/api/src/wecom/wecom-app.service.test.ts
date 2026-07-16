@@ -1,28 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WeComAppService } from "./wecom-app.service.js";
 
 describe("WeComAppService", () => {
-  it("返回自建应用配置状态，不暴露 secret", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns app config status without exposing secret", () => {
     const service = new WeComAppService({
       get: (key: string) =>
         ({
           WECOM_CORP_ID: "corp_demo",
           WECOM_AGENT_ID: "agent_demo",
           WECOM_APP_SECRET: "secret_demo",
-          WECOM_APP_CALLBACK_URL: "http://localhost/callback",
-          WECOM_MOCK_MODE: "true"
+          WECOM_APP_CALLBACK_URL: "http://localhost/callback"
         })[key]
     } as never);
 
     const status = service.getStatus();
 
+    expect(status.mode).toBe("configured");
     expect(status.corpIdConfigured).toBe(true);
     expect(status.agentIdConfigured).toBe(true);
     expect(status.secretConfigured).toBe(true);
     expect(JSON.stringify(status)).not.toContain("secret_demo");
   });
 
-  it("生成企业微信 OAuth 登录 URL", () => {
+  it("builds WeCom OAuth login URL", () => {
     const service = new WeComAppService({
       get: (key: string) =>
         ({
@@ -40,8 +44,8 @@ describe("WeComAppService", () => {
     expect(result.state).toBe("state_1");
   });
 
-  it("mock OAuth 回调用 code 绑定到本地成员", async () => {
-    const service = new WeComAppService({ get: () => "true" } as never);
+  it("accepts mock-prefixed OAuth code only as a test code format", async () => {
+    const service = new WeComAppService({ get: () => undefined } as never);
     const members = {
       findByWeComUserid: async () => ({
         id: "employee_demo",
@@ -57,13 +61,26 @@ describe("WeComAppService", () => {
     expect(result.user.id).toBe("employee_demo");
   });
 
-  it("mock 发送自建应用消息时不请求外部网络", async () => {
-    const service = new WeComAppService({ get: () => "true" } as never);
+  it("sends app message through real WeCom API path", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ errcode: 0, access_token: "token_demo", expires_in: 7200 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ errcode: 0 }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const service = new WeComAppService({
+      get: (key: string) =>
+        ({
+          WECOM_CORP_ID: "corp_demo",
+          WECOM_APP_SECRET: "secret_demo",
+          WECOM_AGENT_ID: "1000002"
+        })[key]
+    } as never);
 
     const result = await service.sendAppMessage({ toUserId: "wecom_user_001", text: "请完成今日打卡" });
 
-    expect(result.mode).toBe("mock");
+    expect(result.mode).toBe("wecom_api");
     expect(result.ok).toBe(true);
     expect(result.message).toContain("wecom_user_001");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

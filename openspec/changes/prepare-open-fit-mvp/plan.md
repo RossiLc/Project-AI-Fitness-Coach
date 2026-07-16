@@ -2,14 +2,15 @@
 
 ## Plan Update: 方案 B 单管理员 Web 工作台
 
-当前实施边界调整为：普通员工不使用 Web 平台，员工入口只保留企业微信群内的 Open Fit 打卡助手和 Open Fit AI 教练；Web 只作为单管理员运营后台。后台只保留运营看板、成员管理、活动配置、排行榜管理四个模块。
+当前实施边界调整为：普通员工不使用 Web 平台，员工入口只保留企业微信群内的 Open Fit 打卡助手和 Open Fit AI 教练；Web 只作为单管理员运营后台。后台工作路径是“群管理 -> 选择当前群 -> 运营看板 / 成员管理 / 活动配置 / 排行榜管理”。后台只保留群管理、运营看板、成员管理、活动配置、排行榜管理五个模块。
 
 本轮实现范围：
-- 运营看板展示今日打卡人数、未打卡人数、总人数和打卡率。
-- 成员管理支持成员列表、今日未打卡筛选、成员打卡明细穿透、作废和恢复打卡。
-- 成员管理提供提醒未打卡按钮，通过群机器人发送不点名的群提醒。
-- 活动配置继续作为活动规则和 AI 教练活动知识来源。
-- 排行榜管理展示参与天数排行榜，并支持手动重建。
+- 群管理支持新增群、生成绑定口令、保存智能机器人消息中的 `chatid`、选择当前群和中文名导入群成员。
+- 运营看板按当前群展示今日打卡人数、未打卡人数、总人数和打卡率。
+- 成员管理按当前群支持成员列表、今日未打卡筛选、成员打卡明细穿透、作废和恢复打卡。
+- 成员管理提供提醒未打卡按钮，通过当前群绑定的打卡助手长连接推送到群里，并 @ 未打卡成员 userid。
+- 活动配置按当前群维护活动规则和 AI 教练活动知识来源；新增活动默认成为该群 active 活动。
+- 排行榜管理按当前群展示打卡次数、运动时长和消耗能量排行榜，并支持手动重建。
 - 移除主导航中的员工调试入口、企业微信配置入口、角色权限入口和系统设置入口。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `using-git-worktrees` before implementation if the current workspace is dirty, `test-driven-development` for business logic, `subagent-driven-development` or `executing-plans` for task execution, and `verification-before-completion` before claiming completion.
@@ -23,10 +24,10 @@
 ## Global Constraints
 
 - 所有项目自写文档、OpenSpec 产物和新增说明使用中文。
-- 企业微信 webhook key、secret、access token 和 AI API key 不得提交到仓库。
-- 第一阶段必须支持无真实企业微信权限的 mock 模式，也必须支持配置真实群机器人 webhook 后发送测试消息。
+- 企业微信 Bot Secret、应用 secret、access token 和 AI API key 不得提交到仓库。
+- 第一阶段默认使用企业微信智能机器人 SDK 长连接；后台群推送通过打卡助手 `sendMessage` 主动发送，目标群 `chatid` 来自群内 @ 机器人消息。
 - AI 识别结果必须由员工确认或修正后才能计入统计；第一阶段可使用规则解析器替代真实 AI。
-- 群机器人不得公开点名未打卡成员。
+- 群提醒必须发送到管理员当前选择的企业微信群，并基于当前群成员计算未打卡名单；是否 @ 成员由当前产品策略决定，目前实现为 @ 未打卡成员 userid。
 - 本地上传目录不得通过静态目录直接公开，必须预留后端鉴权访问路径。
 - 图片识别、真实企业微信 OAuth、自建应用个人提醒、完整 AI 健康咨询不作为第一阶段阻塞项。
 
@@ -41,7 +42,7 @@
 - 创建 NestJS API 模块边界、健康检查、mock auth、活动/打卡/提醒/企业微信基础 API。
 - 创建 Prisma schema、数据库连接、seed 数据和本地文件存储目录。
 - 创建 worker、BullMQ 队列和企业微信消息发送 job。
-- 支持企业微信群机器人真实 webhook 测试发送；无 webhook 时使用 mock 发送并保留日志。
+- 支持企业微信智能机器人长连接测试发送；未捕获目标群 `chatid` 时返回明确错误并提示先在群里 @ 打卡助手。
 - 提供 Docker Compose 或等价脚本启动 PostgreSQL、Redis、API、worker、Web。
 - 提供 lint、类型检查、测试、OpenSpec 校验和冒烟验证。
 
@@ -108,23 +109,18 @@
    - `API_PORT`
    - `WEB_PORT`
    - `LOCAL_STORAGE_ROOT`
-   - `WECOM_BOT_WEBHOOK_URL`
-   - `WECOM_MOCK_MODE`
-   - `WECOM_INTELLIGENT_BOT_ID`
+   - `WECOM_CHECKIN_BOT_ID`
+   - `WECOM_CHECKIN_BOT_SECRET`
    - `WECOM_CHECKIN_BOT_ID`
    - `WECOM_CHECKIN_BOT_SECRET`
    - `WECOM_COACH_BOT_ID`
    - `WECOM_COACH_BOT_SECRET`
    - `WECOM_INTELLIGENT_BOT_WS_URL`
    - `WECOM_CORP_ID`
-   - `WECOM_AGENT_ID`
    - `WECOM_APP_SECRET`
-   - `AI_MOCK_MODE`
-   - `AI_PROVIDER`
    - `AI_BASE_URL`
    - `AI_API_KEY`
    - `AI_MODEL=gpt-5.5`
-   - `MOCK_AUTH_ENABLED`
 5. 验证：`pnpm -v` 可用；若不可用，在最终输出中说明需要安装 pnpm。
 
 ### Task 2: Shared 契约包
@@ -230,7 +226,7 @@
 
 **Steps:**
 
-1. 第一阶段启用 `MOCK_AUTH_ENABLED=true` 时，根据 query 或 header 切换角色。
+1. 当前 Web 工作台只保留单管理员视角，不再暴露员工/多角色切换配置。
 2. 未传角色时默认员工。
 3. 添加角色守卫占位，后续可替换为企业微信 OAuth。
 4. 编写测试覆盖三类角色。
@@ -300,9 +296,9 @@
 
 **Steps:**
 
-1. `WECOM_MOCK_MODE=true` 时不请求外部网络，返回 mock success 并记录日志。
-2. `WECOM_MOCK_MODE=false` 且配置 webhook 时，向企业微信群机器人 webhook 发送 markdown 消息。
-3. 未配置 webhook 时返回 `WECOM_WEBHOOK_NOT_CONFIGURED`。
+1. 读取最近捕获的打卡助手群 `chatid`。
+2. 通过打卡助手智能机器人长连接 `sendMessage(chatid, markdown)` 发送群消息。
+3. 未捕获群 `chatid` 时返回明确错误，提示先在目标群 @ 打卡助手。
 4. 发送失败时返回 `WECOM_SEND_FAILED`，并记录失败原因。
 5. 编写测试覆盖 mock 成功、未配置失败。
 
@@ -395,7 +391,7 @@
 
 1. 运营看板展示打卡率、未打卡人数、累计运动时长和待处理异常。
 2. 提醒任务页展示 pending、sent、failed、manual 状态。
-3. 企业微信配置页展示当前 mock/真实 webhook 模式。
+3. 企业微信配置页展示当前智能机器人长连接群推送说明和测试发送结果。
 4. 测试发送按钮调用后端并展示成功、失败或未配置原因。
 5. 打卡管理、活动配置、成员映射等页面先提供主体框架和空态。
 
@@ -444,7 +440,7 @@
    - 今日打卡可以从输入到确认提交。
    - 管理看板能看到 seed 数据。
    - 企业微信配置页 mock 测试发送成功。
-   - 配置真实 webhook 时群内能收到测试消息。
+   - 捕获目标群 `chatid` 后，群内能收到打卡助手长连接测试消息。
 6. 更新 `tasks.md` 中已完成项。
 7. 若目录结构、启动方式和技术栈已稳定，回写知识库。
 
@@ -455,7 +451,7 @@
 - 员工能完成一次文本打卡：输入、识别、确认、记录展示。
 - 管理员能看到运营看板、提醒任务和企业微信测试发送入口。
 - 后端模块边界已经形成，不把打卡、企业微信、AI、统计混在单文件中。
-- worker 能消费企业微信消息 job；无真实 webhook 时 mock 成功，有真实 webhook 时可发送群消息。
+- worker 能消费企业微信消息 job；群主动推送由 API 进程内智能机器人长连接发送器承担。
 - `.env.example` 完整，仓库不包含真实密钥。
 - 本地上传目录存在但不被静态公开。
 - lint、类型检查、测试和 OpenSpec 校验通过。
@@ -557,7 +553,7 @@
 - 新增 `WeComStreamBotService`，监听 SDK `message.text`、`message.image`、`message.mixed` 事件。
 - 长连接适配层把 SDK frame 转换为现有 `WeComBotEventRequest`，注入 `botRole=checkin|coach` 后复用 `WeComBotService.handleEvent()`。
 - 业务回复通过 SDK `replyStream` 发回企业微信。
-- `NODE_ENV=test` 或 `WECOM_MOCK_MODE=true` 时不得主动建立外部长连接。
+- `NODE_ENV=test` 时不得主动建立外部长连接；真实运行默认建立智能机器人长连接。
 
 ## Local Guardrail Increment
 
@@ -594,7 +590,7 @@
 
 - 如果 monorepo 目录结构已落地，更新 `docs/知识库/代码规范.md`。
 - 如果 Docker Compose 启动方式已落地，更新 `docs/知识库/基础架构.md`。
-- 如果企业微信第一阶段采用 mock/真实 webhook 双模式，更新 `docs/知识库/业务规范.md` 或 `基础架构.md`。
+- 如果企业微信长连接入站或主动群推送边界变化，更新 `docs/知识库/业务规范.md` 或 `基础架构.md`。
 
 ## Completion Verification
 

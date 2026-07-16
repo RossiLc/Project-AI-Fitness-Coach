@@ -1,5 +1,6 @@
 <template>
-  <section class="panel">
+  <section v-if="!groupId" class="empty">请先在群管理中新增并选择一个群。</section>
+  <section v-else class="panel">
     <div class="panel-heading">
       <div>
         <span class="eyebrow">Members</span>
@@ -36,7 +37,7 @@
         </tr>
       </tbody>
     </table>
-    <div v-else class="empty">{{ missingOnly ? "今天没有未打卡成员。" : "暂无成员数据。" }}</div>
+    <div v-else class="empty">{{ missingOnly ? "今天没有未打卡成员。" : "当前群暂无成员，请先在群管理中导入成员。" }}</div>
 
     <p v-if="message" class="muted">{{ message }}</p>
     <p v-if="error" class="error">{{ error }}</p>
@@ -44,20 +45,23 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import type { MemberDto } from "@openfit/shared";
 import { getMembers, sendGroupMissingCheckinReminder } from "../../api/admin";
+import { getCurrentGroupId, onCurrentGroupChange } from "../../api/group-context";
 
 const members = ref<MemberDto[]>([]);
 const missingOnly = ref(false);
+const groupId = ref(getCurrentGroupId());
 const message = ref("");
 const error = ref("");
 
 async function load() {
+  if (!groupId.value) return;
   error.value = "";
   try {
-    members.value = await getMembers(missingOnly.value);
+    members.value = await getMembers(missingOnly.value, groupId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "成员加载失败";
   }
@@ -69,14 +73,23 @@ async function toggleMissing() {
 }
 
 async function sendReminder() {
+  if (!groupId.value) return;
   error.value = "";
   try {
-    const result = await sendGroupMissingCheckinReminder();
-    message.value = `已通过打卡助手群机器人发送提醒：今日未打卡 ${result.missingCount} 人。`;
+    const result = await sendGroupMissingCheckinReminder(groupId.value);
+    message.value = `已通过打卡助手推送当前群未打卡提醒：今日未打卡 ${result.missingCount} 人。`;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "未打卡提醒发送失败";
   }
 }
 
-onMounted(load);
+let stop = () => {};
+onMounted(() => {
+  stop = onCurrentGroupChange((next) => {
+    groupId.value = next;
+    void load();
+  });
+  void load();
+});
+onUnmounted(() => stop());
 </script>

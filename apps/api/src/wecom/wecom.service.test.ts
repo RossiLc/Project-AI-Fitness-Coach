@@ -5,7 +5,7 @@ import { WeComService } from "./wecom.service.js";
 const admin: CurrentUser = {
   id: "org_admin_demo",
   orgId: "org_demo",
-  displayName: "企业管理员老周",
+  displayName: "管理员",
   role: MemberRole.OrgAdmin
 };
 
@@ -14,7 +14,7 @@ function createService() {
   const sender = {
     sendMarkdown: async (text: string) => {
       sent.push(text);
-      return { mode: "mock" as const, ok: true, message: `mock 已发送：${text}` };
+      return { mode: "intelligent_bot" as const, ok: true, message: `sent: ${text}` };
     }
   };
   const prisma = {
@@ -25,8 +25,8 @@ function createService() {
   const leaderboards = {
     current: async () => ({
       entries: [
-        { rank: 1, memberName: "员工甲", checkinDays: 2, durationMin: 70 },
-        { rank: 2, memberName: "员工乙", checkinDays: 1, durationMin: 100 }
+        { rank: 1, memberName: "成员甲", checkinDays: 2, durationMin: 70 },
+        { rank: 2, memberName: "成员乙", checkinDays: 1, durationMin: 100 }
       ]
     })
   };
@@ -34,7 +34,7 @@ function createService() {
 }
 
 describe("WeComService", () => {
-  it("手动发送测试小贴士", async () => {
+  it("sends daily tip through intelligent bot sender", async () => {
     const { service, sent } = createService();
 
     const result = await service.sendDailyTip(admin);
@@ -43,14 +43,14 @@ describe("WeComService", () => {
     expect(sent[0]).toContain("今日小贴士");
   });
 
-  it("手动发送示例周榜", async () => {
+  it("sends weekly leaderboard through intelligent bot sender", async () => {
     const { service, sent } = createService();
 
     const result = await service.sendWeeklyLeaderboard(admin);
 
     expect(result.ok).toBe(true);
     expect(sent[0]).toContain("本周运动榜");
-    expect(sent[0]).toContain("员工甲");
+    expect(sent[0]).toContain("成员甲");
     expect(sent[0]).toContain("有效打卡 2 天");
   });
 });

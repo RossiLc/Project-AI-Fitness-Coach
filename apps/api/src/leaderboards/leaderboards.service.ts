@@ -22,8 +22,8 @@ type AggregatedEntry = Omit<LeaderboardEntryDto, "rank"> & { days: Set<string> }
 export class LeaderboardsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async current(category: LeaderboardCategory = "checkin_days"): Promise<LeaderboardDto> {
-    const activity = await this.prisma.activity.findFirst({ where: { status: "active" }, orderBy: { startAt: "desc" } });
+  async current(category: LeaderboardCategory = "checkin_days", groupId?: string): Promise<LeaderboardDto> {
+    const activity = await this.prisma.activity.findFirst({ where: { status: "active", ...(groupId ? { groupId } : {}) }, orderBy: { startAt: "desc" } });
     if (!activity) {
       return { status: "empty", category, rule: RANKING_RULES[category], generatedAt: new Date().toISOString(), entries: [] };
     }
@@ -42,9 +42,9 @@ export class LeaderboardsService {
     };
   }
 
-  async rebuildSnapshot(category: LeaderboardCategory = "checkin_days") {
-    const current = await this.current(category);
-    const activity = await this.prisma.activity.findFirst({ where: { status: "active" }, orderBy: { startAt: "desc" } });
+  async rebuildSnapshot(category: LeaderboardCategory = "checkin_days", groupId?: string) {
+    const current = await this.current(category, groupId);
+    const activity = await this.prisma.activity.findFirst({ where: { status: "active", ...(groupId ? { groupId } : {}) }, orderBy: { startAt: "desc" } });
     if (!activity) return current;
 
     const snapshot = await this.prisma.leaderboardSnapshot.create({

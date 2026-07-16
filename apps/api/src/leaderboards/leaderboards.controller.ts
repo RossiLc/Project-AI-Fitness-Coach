@@ -8,14 +8,14 @@ export class LeaderboardsController {
   constructor(@Inject(LeaderboardsService) private readonly leaderboards: LeaderboardsService) {}
 
   @Get("current")
-  current(@Query("category") category?: LeaderboardCategory) {
-    return this.leaderboards.current(normalizeCategory(category));
+  current(@Query("category") category?: LeaderboardCategory, @Query("groupId") groupId?: string) {
+    return this.leaderboards.current(normalizeCategory(category), groupId);
   }
 
   @Post("rebuild")
   @UseGuards(AllowRoles(MemberRole.OrgAdmin))
-  rebuild(@Query("category") category?: LeaderboardCategory) {
-    return this.leaderboards.rebuildSnapshot(normalizeCategory(category));
+  rebuild(@Query("category") category?: LeaderboardCategory, @Query("groupId") groupId?: string) {
+    return this.leaderboards.rebuildSnapshot(normalizeCategory(category), groupId);
   }
 }
 

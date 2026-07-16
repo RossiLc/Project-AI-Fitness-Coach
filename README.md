@@ -173,7 +173,17 @@ pnpm docker:up
 | Open Fit 打卡助手 | 处理运动打卡、补图、确认提交和打卡状态。 | `WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET` |
 | Open Fit AI 教练 | 处理低风险运动建议、活动规则、活动信息和排行榜查询，不创建打卡。 | `WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET` |
 
-机器人收到企业微信入站消息时会优先使用 `from.userid` 识别成员；如果该 `userid` 首次出现，系统会自动创建普通员工档案并继续处理本次消息。管理员后续可在 Web 工作台补全姓名、部门和角色。缺少 `userid` 的消息不会匿名入库。
+机器人收到企业微信入站消息时会优先使用 `from.userid` 识别成员；如果该 `userid` 首次出现，系统会自动创建普通员工档案并继续处理本次消息。缺少 `userid` 的消息不会匿名入库。
+
+Web 工作台当前是单管理员后台，正式工作路径是：
+
+1. 进入“群管理”新增一个企业微信群，复制生成的绑定口令。
+2. 在目标企业微信群里 @Open Fit 打卡助手发送：`绑定群 OF-XXXXXX`。
+3. 回到 Web 刷新群管理，确认该群状态为“已绑定”并选择为当前群。
+4. 在群管理中粘贴群成员中文名列表，例如 `张三;李四;`，系统会通过企业微信通讯录接口匹配 userid。
+5. 后续运营看板、成员管理、活动配置、排行榜管理和提醒未打卡都按当前群执行。
+
+中文名导入需要配置 `WECOM_CORP_ID` 和具备通讯录读取权限的 `WECOM_APP_SECRET`。如果出现重名或未找到，Web 会展示待人工处理结果，不会猜测绑定。
 
 AI 教练咨询链路不使用模拟 AI 回复：用户输入先经过本地轻量安全围栏，低风险问题才调用 OpenAI-compatible 真实模型。模型输出还会再做一次安全校验，命中密钥泄漏、提示词注入、敏感内容或健康高风险时会替换为安全提示。未配置 `AI_BASE_URL` 或 `AI_API_KEY` 时会明确提示 AI 服务尚未配置；你后续只需要在 `.env` 或部署密钥中替换 URL、key 和模型名。
 
@@ -186,7 +196,6 @@ AI 教练咨询链路不使用模拟 AI 回复：用户输入先经过本地轻�
 本地联调时在 `.env` 中填写真实 Bot ID 和 Secret，并设置：
 
 ```env
-WECOM_MOCK_MODE=false
 WECOM_CHECKIN_BOT_ID=你的打卡助手BotID
 WECOM_CHECKIN_BOT_SECRET=你的打卡助手Secret
 WECOM_COACH_BOT_ID=你的AI教练BotID
@@ -194,21 +203,20 @@ WECOM_COACH_BOT_SECRET=你的AI教练Secret
 AI_BASE_URL=你的模型服务/v1
 AI_API_KEY=你的key
 AI_MODEL=gpt-5.5
-GUARDRAIL_PROVIDER=local
-LOCAL_GUARDRAIL_ENGINES=vard,sensitive-word-tool
 LOCAL_GUARDRAIL_MAX_INPUT_LENGTH=3000
 LOCAL_GUARDRAIL_EXTRA_WORDS=
 ```
 
 不要把真实 Secret 写入 README、`.env.example` 或任何会提交到 Git 的文件；真实值只放本地 `.env` 或部署环境的密钥配置中。
 
-### Web 运动打卡平台
+### Web 管理工作台
 
-- 员工上传运动图片或输入文字运动内容。
-- AI 识别运动项目、时长、强度和估算热量。
-- 员工确认或修正识别结果后形成正式打卡记录。
-- 仪表盘展示柱状图、排行榜和对比数据。
-- 每天晚上 8 点提醒未打卡成员。
+- Web 不作为普通员工入口；员工只通过企业微信打卡助手和 AI 教练使用系统。
+- 管理员先在群管理中绑定企业微信群并初始化群成员。
+- 运营看板只展示当前群今日打卡人数、未打卡人数、总人数和打卡率。
+- 成员管理支持筛选当前群今日未打卡成员、查看成员打卡明细、预览打卡图片、作废和恢复打卡。
+- 活动配置以列表 + 表单维护当前群活动名称、周期和活动内容；活动内容会作为 AI 教练活动规则查询知识源。
+- 排行榜管理支持当前群的打卡次数、运动时长和消耗能量排行榜。
 
 ## 如何添加一个新功能
 

@@ -102,7 +102,7 @@ describe("RemindersService", () => {
     expect(result.lastError).toBeNull();
   });
 
-  it("sends a group reminder for missing checkins without exposing member names", async () => {
+  it("sends a group reminder with missing members identified by WeCom userid", async () => {
     let sentText = "";
     const prisma = {
       activity: {
@@ -110,8 +110,9 @@ describe("RemindersService", () => {
       },
       member: {
         findMany: async () => [
-          { id: "employee_demo", displayName: "Employee A" },
-          { id: "admin_demo", displayName: "Admin B" }
+          { id: "employee_demo", displayName: "Employee A", wecomUserid: "wecom_employee_a" },
+          { id: "unbound_demo", displayName: "Unbound C", wecomUserid: null },
+          { id: "admin_demo", displayName: "Admin B", wecomUserid: "wecom_admin_b" }
         ]
       },
       checkin: {
@@ -121,16 +122,57 @@ describe("RemindersService", () => {
     const sender = {
       sendMarkdown: async (text: string) => {
         sentText = text;
-        return { mode: "mock" as const, ok: true, message: "mock sent" };
+        return { mode: "intelligent_bot" as const, ok: true, message: "sent" };
       }
     };
     const service = new RemindersService(prisma as never, undefined, sender as never);
 
     const result = await service.sendGroupMissingCheckinReminder(new Date("2026-07-14T20:00:00+08:00"));
 
+    expect(result.missingCount).toBe(2);
+    expect(result.mode).toBe("intelligent_bot");
+    expect(sentText).toContain("2");
+    expect(sentText).toContain("<@wecom_employee_a>");
+    expect(sentText).toContain("Employee A");
+    expect(sentText).toContain("Unbound C");
+    expect(sentText).toContain("未绑定企业微信 userid");
+    expect(sentText).not.toContain("Admin B");
+  });
+
+  it("sends missing-checkin reminder to the selected group chat using only selected group members", async () => {
+    let sentChatId = "";
+    let sentText = "";
+    const prisma = {
+      weComGroup: {
+        findFirst: async ({ where }: { where: Record<string, unknown> }) => (where.id === "group_1" ? { id: "group_1", orgId: "org_demo", chatId: "chat_group_1" } : null)
+      },
+      activity: {
+        findFirst: async () => ({ id: "act_demo", orgId: "org_demo", groupId: "group_1" })
+      },
+      weComGroupMember: {
+        findMany: async () => [
+          { memberId: "employee_a", displayName: "Employee A", wecomUserid: "wecom_a", member: { id: "employee_a", displayName: "Employee A", wecomUserid: "wecom_a" } },
+          { memberId: "employee_b", displayName: "Employee B", wecomUserid: "wecom_b", member: { id: "employee_b", displayName: "Employee B", wecomUserid: "wecom_b" } }
+        ]
+      },
+      checkin: {
+        findMany: async () => [{ memberId: "employee_b" }]
+      }
+    };
+    const sender = {
+      sendMarkdownToChat: async (chatId: string, text: string) => {
+        sentChatId = chatId;
+        sentText = text;
+        return { mode: "intelligent_bot" as const, ok: true, message: "sent" };
+      }
+    };
+    const service = new RemindersService(prisma as never, undefined, sender as never);
+
+    const result = await service.sendGroupMissingCheckinReminder("group_1", new Date("2026-07-14T20:00:00+08:00"));
+
     expect(result.missingCount).toBe(1);
-    expect(result.mode).toBe("mock");
-    expect(sentText).toContain("1");
-    expect(sentText).not.toContain("Employee A");
+    expect(sentChatId).toBe("chat_group_1");
+    expect(sentText).toContain("<@wecom_a>");
+    expect(sentText).not.toContain("Employee B");
   });
 });

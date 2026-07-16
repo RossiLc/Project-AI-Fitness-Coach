@@ -11,16 +11,17 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 - **AND** Web 工作台 SHALL NOT 因 `public.Member`、`public.Activity` 等基础表不存在而报错
 
 ### Requirement: 活动内容 API 与 AI 教练查询
-后端 SHALL 提供活动列表和活动内容保存 API，并让企业微信 AI 教练在活动规则查询意图下读取 active 活动的活动内容。
+后端 SHALL 提供按群维护的活动列表和活动内容保存 API，并让企业微信 AI 教练在活动规则查询意图下优先读取当前企业微信群 active 活动的活动内容。
 
 #### Scenario: 查询活动列表
-- **WHEN** Web 调用 `GET /api/activities/configs`
-- **THEN** API SHALL 返回当前组织的活动列表
+- **WHEN** Web 调用 `GET /api/activities/configs?groupId=...`
+- **THEN** API SHALL 返回当前组织当前群的活动列表
 - **AND** API SHALL NOT 依赖独立 `ActivityRule` 表
 
 #### Scenario: 新增活动配置
-- **WHEN** Web 调用 `POST /api/activities/configs` 并提交活动名称、活动周期和活动内容
-- **THEN** API SHALL 为当前组织创建一条 `draft` 活动
+- **WHEN** Web 调用 `POST /api/activities/configs?groupId=...` 并提交活动名称、活动周期和活动内容
+- **THEN** API SHALL 为当前组织当前群创建一条 `active` 活动
+- **AND** API SHALL 将同一组织同一群原 active 活动置为 `paused`
 - **AND** API SHALL 将活动周期保存到 `Activity.startAt` 和 `Activity.endAt`
 - **AND** API SHALL 将活动内容保存到 `Activity.ruleJson.content`
 - **AND** API SHALL 返回可用于活动列表展示的活动配置 DTO
@@ -32,9 +33,29 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 
 #### Scenario: AI 教练查询活动规则
 - **WHEN** 企业微信 AI 教练收到活动规则查询
-- **THEN** 后端 SHALL 查询当前组织 active 活动的 `ruleJson.content`
+- **THEN** 后端 SHALL 根据消息 `chatid` 识别当前群，并查询当前群 active 活动的 `ruleJson.content`
 - **AND** 回复 SHALL 包含活动名称和活动内容
 - **AND** 后端 SHALL NOT 使用硬编码活动说明替代后台规则
+
+### Requirement: 群管理 API
+后端 SHALL 将企业微信群作为运营后台的一等资源，支持创建群、绑定 chatid、导入成员和按群统计。
+
+#### Scenario: 创建待绑定群
+- **WHEN** 管理员调用 `POST /api/admin/groups` 创建企业微信群
+- **THEN** API SHALL 生成唯一绑定口令
+- **AND** 新群 SHALL 处于 `pending_binding` 状态
+
+#### Scenario: 企业微信群绑定 chatid
+- **WHEN** 群内成员 @ Open Fit 打卡助手并发送绑定口令
+- **THEN** 后端 SHALL 将入站消息的 `chatid` 写入对应群
+- **AND** 群状态 SHALL 变为 `active`
+- **AND** 后续后台主动提醒 SHALL 使用该群 `chatid` 作为发送目标
+
+#### Scenario: 中文名导入群成员
+- **WHEN** 管理员提交中文名列表导入群成员
+- **THEN** 后端 SHALL 调用企业微信通讯录接口按名称匹配 userid
+- **AND** 匹配唯一时 SHALL upsert 本地成员并写入 `WeComGroupMember`
+- **AND** 重名或未找到时 SHALL 返回结构化结果给前端处理
 
 ### Requirement: 企业微信成员信息补全
 后端 SHALL 使用企业微信入站消息中的 `from.userid` 识别成员；当 userid 首次出现且配置了通讯录凭据时，后端 SHALL 调用企业微信通讯录接口补全成员姓名和部门。
@@ -58,8 +79,8 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 后端 SHALL 支持方案 B 的单管理员运营后台 API，并保留现有模块边界。
 
 #### Scenario: 查询今日未打卡成员
-- **WHEN** Web 调用 `GET /api/admin/members?missingToday=true`
-- **THEN** API SHALL 返回当前活动下今日没有 `submitted` 或 `corrected` 有效打卡的 active 成员
+- **WHEN** Web 调用 `GET /api/admin/members?groupId=...&missingToday=true`
+- **THEN** API SHALL 返回当前群当前活动下今日没有 `submitted` 或 `corrected` 有效打卡的 active 成员
 
 #### Scenario: 查询成员打卡明细
 - **WHEN** Web 调用 `GET /api/admin/members/:id/checkins`
@@ -72,13 +93,13 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 - **AND** API SHALL 写入 `checkin.restore` 审计日志
 
 #### Scenario: 群提醒未打卡
-- **WHEN** 管理员调用 `POST /api/admin/reminders/group-missing-checkins`
-- **THEN** API SHALL 统计今日未打卡人数并通过群机器人发送提醒
-- **AND** 群消息 SHALL NOT 公开未打卡成员名单
+- **WHEN** 管理员调用 `POST /api/admin/reminders/group-missing-checkins?groupId=...`
+- **THEN** API SHALL 统计当前群今日未打卡成员并通过该群绑定的打卡助手长连接发送提醒
+- **AND** 群消息 SHALL 基于未打卡成员企业微信 userid @ 对应成员
 
 #### Scenario: 今日运营看板
-- **WHEN** Web 调用 `GET /api/admin/dashboard/summary`
-- **THEN** API SHALL 按当天时间范围统计今日打卡人数、未打卡人数、总人数和打卡率
+- **WHEN** Web 调用 `GET /api/admin/dashboard/summary?groupId=...`
+- **THEN** API SHALL 按当前群和当天时间范围统计今日打卡人数、未打卡人数、总人数和打卡率
 
 ### Requirement: 后端 API 分组
 

@@ -10,8 +10,8 @@ export class MembersController {
   constructor(@Inject(MembersService) private readonly members: MembersService) {}
 
   @Get()
-  list(@CurrentUserDecorator() user: CurrentUser, @Query("missingToday") missingToday?: string) {
-    return this.members.list(user.orgId, { missingToday: missingToday === "true" });
+  list(@CurrentUserDecorator() user: CurrentUser, @Query("missingToday") missingToday?: string, @Query("groupId") groupId?: string) {
+    return this.members.list(user.orgId, { missingToday: missingToday === "true", groupId });
   }
 
   @Get(":id/checkins")

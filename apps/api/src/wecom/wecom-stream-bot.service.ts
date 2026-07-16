@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { WSClient, generateReqId, type ImageMessage, type MixedMessage, type TextMessage, type WSClientOptions, type WsFrame } from "@wecom/aibot-node-sdk";
-import type { WeComBotAttachment, WeComBotEventRequest, WeComBotRole } from "@openfit/shared";
+import type { WeComBotAttachment, WeComBotEventRequest, WeComBotRole, WeComSendResult } from "@openfit/shared";
+import { ApiErrorCode } from "@openfit/shared";
+import { ApiException } from "../common/api-response.js";
 import { WeComBotService } from "./wecom-bot.service.js";
 import { WeComConfigService } from "./wecom-config.service.js";
 
@@ -9,6 +11,7 @@ export interface WeComStreamBotClient {
   connect(): unknown;
   disconnect(): unknown;
   replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>;
+  sendMessage(chatId: string, body: { msgtype: "markdown"; markdown: { content: string } }): Promise<unknown>;
   downloadFile(url: string, aesKey?: string): Promise<{ buffer: Buffer; filename?: string }>;
 }
 
@@ -26,6 +29,7 @@ interface StreamBotRegistration {
 export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WeComStreamBotService.name);
   private readonly clients: WeComStreamBotClient[] = [];
+  private readonly clientsByRole = new Map<WeComBotRole, WeComStreamBotClient>();
 
   constructor(
     @Inject(WeComConfigService) private readonly config: WeComConfigService,
@@ -37,7 +41,7 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     const config = this.config.getConfig();
-    if (process.env.NODE_ENV === "test" || config.mockMode) return;
+    if (process.env.NODE_ENV === "test") return;
 
     for (const registration of this.getRegistrations()) {
       const client = this.clientFactory({
@@ -49,6 +53,7 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
       this.bindClient(client, registration.role);
       client.connect();
       this.clients.push(client);
+      this.clientsByRole.set(registration.role, client);
     }
   }
 
@@ -57,6 +62,25 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
       client.disconnect();
     }
     this.clients.length = 0;
+    this.clientsByRole.clear();
+  }
+
+  async sendMarkdown(role: WeComBotRole, chatId: string, text: string): Promise<WeComSendResult> {
+    const client = this.clientsByRole.get(role);
+    if (!client) {
+      throw new ApiException(ApiErrorCode.WeComWebhookNotConfigured, `企业微信智能机器人 ${role} 长连接尚未建立`);
+    }
+
+    await client.sendMessage(chatId, {
+      msgtype: "markdown",
+      markdown: { content: text }
+    });
+
+    return {
+      mode: "intelligent_bot",
+      ok: true,
+      message: "企业微信智能机器人群消息已发送"
+    };
   }
 
   private getRegistrations(): StreamBotRegistration[] {

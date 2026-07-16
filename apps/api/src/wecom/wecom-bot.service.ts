@@ -2,10 +2,11 @@ import { Inject, Injectable } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { BotIntent, MemberRole, type CurrentUser, type RecognitionResultDto, type WeComBotAttachment, type WeComBotEventRequest, type WeComBotEventResponse, type WeComBotRole } from "@openfit/shared";
+import { BotIntent, MemberRole, type CurrentUser, type RecognitionResultDto, type WeComBotAttachment, type WeComBotEventRequest, type WeComBotEventResponse, type WeComBotRole, type WeComGroupDto } from "@openfit/shared";
 import { AiCheckinParserService } from "../ai/ai-checkin-parser.service.js";
 import { AiProviderService } from "../ai/ai-provider.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
+import { GroupsService } from "../groups/groups.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { BotIntentRouterService } from "./bot-intent-router.service.js";
 import { CoachSafetyService } from "./coach-safety.service.js";
@@ -28,7 +29,8 @@ export class WeComBotService {
     @Inject(BotIntentRouterService) private readonly router: BotIntentRouterService,
     @Inject(CoachSafetyService) private readonly coachSafety: CoachSafetyService,
     @Inject(AiCheckinParserService) private readonly aiParser: AiCheckinParserService,
-    @Inject(AiProviderService) private readonly aiProvider: AiProviderService
+    @Inject(AiProviderService) private readonly aiProvider: AiProviderService,
+    @Inject(GroupsService) private readonly groups: GroupsService
   ) {}
 
   async handleEvent(body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
@@ -39,11 +41,19 @@ export class WeComBotService {
     if (!user) return this.remember(body.messageId, this.text(BotIntent.Unknown, "无法识别你的企业微信身份，请先联系管理员完成成员绑定。"));
 
     const role = this.resolveBotRole(body);
+    if (role) {
+      const boundGroup = await this.groups.bindFromWeComMessage(user.orgId, body.chatId, body.fromUserId, body.text);
+      if (boundGroup) return this.remember(body.messageId, this.buildGroupBoundResponse(boundGroup));
+      if (this.containsBindCode(body.text)) {
+        return this.remember(body.messageId, this.text(BotIntent.Unknown, "未找到可绑定的群。请确认口令是否正确、是否已经绑定，口令格式类似：OF-1CA0A9。推荐发送：绑定群 OF-1CA0A9"));
+      }
+      await this.groups.observeMemberByChat(user.orgId, body.chatId, body.fromUserId);
+    }
     if (role === "checkin") return this.remember(body.messageId, await this.handleCheckinBotEvent(user, body));
-    if (role === "coach") return this.remember(body.messageId, await this.handleCoachBotEvent(user, body.text));
+    if (role === "coach") return this.remember(body.messageId, await this.handleCoachBotEvent(user, body));
 
     const intent = this.router.detect(body.text);
-    if (intent === BotIntent.CheckinRecord) return this.remember(body.messageId, await this.handleCheckinRecord(user, body.text, body.attachments));
+    if (intent === BotIntent.CheckinRecord) return this.remember(body.messageId, await this.handleCheckinRecord(user, body.text, body.attachments, body.chatId));
     if (intent === BotIntent.CheckinConfirm) return this.remember(body.messageId, await this.handleCheckinConfirm(user));
     if (intent === BotIntent.CoachAdvice) return this.remember(body.messageId, await this.handleCoachAdvice(body.text));
     if (intent === BotIntent.ActivityQuery) return this.remember(body.messageId, this.text(intent, "当前活动：夏季 21 天运动打卡。发送你的运动内容，例如“跑步30分钟”，我会先生成待确认打卡。"));
@@ -58,6 +68,14 @@ export class WeComBotService {
     return body.botId ? "coach" : null;
   }
 
+  private containsBindCode(text: string): boolean {
+    return /OF-[A-Z0-9]{6}/i.test(text);
+  }
+
+  private buildGroupBoundResponse(group: WeComGroupDto): WeComBotEventResponse {
+    return this.text(BotIntent.Unknown, `群绑定成功：${group.name}。\n绑定口令是 ${group.bindCode}，后续后台提醒会通过 Open Fit 打卡助手发送到当前群。`);
+  }
+
   private async handleCheckinBotEvent(user: CurrentUser, body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
     const intent = this.router.detect(body.text);
     if (intent === BotIntent.CheckinConfirm) return this.handleCheckinConfirm(user);
@@ -67,21 +85,23 @@ export class WeComBotService {
     if (!hasImages) return this.text(BotIntent.Unknown, "打卡需要同时包含文字内容和图片凭证。请补发打卡图片，或发送图片让我先识别。");
 
     if (this.hasImageOnly(body)) return this.handleImageOnlyCheckin(user, body);
-    return this.handleCheckinRecord(user, body.text, attachments);
+    return this.handleCheckinRecord(user, body.text, attachments, body.chatId);
   }
 
-  private async handleCoachBotEvent(user: CurrentUser, text: string): Promise<WeComBotEventResponse> {
+  private async handleCoachBotEvent(user: CurrentUser, body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
+    const text = body.text;
     const safety = this.coachSafety.buildReply(text);
     if (safety.riskLevel === "escalate") return this.text(BotIntent.CoachAdvice, safety.text);
 
     const intent = this.router.detect(text);
-    if (intent === BotIntent.ActivityQuery) return this.handleActivityQuery(user);
+    if (intent === BotIntent.ActivityQuery) return this.handleActivityQuery(user, body.chatId);
     if (intent === BotIntent.LeaderboardQuery) return this.text(intent, "排行榜查询已收到。群内只展示必要排名信息，不公开图片、健康咨询原文或未打卡名单。");
     return this.handleCoachAdvice(text);
   }
 
-  private async handleActivityQuery(user: CurrentUser): Promise<WeComBotEventResponse> {
-    const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active" }, orderBy: { startAt: "desc" } });
+  private async handleActivityQuery(user: CurrentUser, chatId?: string): Promise<WeComBotEventResponse> {
+    const groupId = await this.resolveGroupId(user.orgId, chatId);
+    const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active", ...(groupId ? { groupId } : {}) }, orderBy: { startAt: "desc" } });
     if (!activity) return this.text(BotIntent.ActivityQuery, "当前没有进行中的活动。");
 
     const content = readActivityContent(activity.ruleJson);
@@ -164,8 +184,9 @@ export class WeComBotService {
     };
   }
 
-  private async handleCheckinRecord(user: CurrentUser, text: string, attachments: WeComBotAttachment[] = []): Promise<WeComBotEventResponse> {
-    const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active" }, orderBy: { startAt: "desc" } });
+  private async handleCheckinRecord(user: CurrentUser, text: string, attachments: WeComBotAttachment[] = [], chatId?: string): Promise<WeComBotEventResponse> {
+    const groupId = await this.resolveGroupId(user.orgId, chatId);
+    const activity = await this.prisma.activity.findFirst({ where: { orgId: user.orgId, status: "active", ...(groupId ? { groupId } : {}) }, orderBy: { startAt: "desc" } });
     if (!activity) return this.text(BotIntent.CheckinRecord, "当前没有进行中的活动，暂时无法打卡。");
 
     const parsed = await this.parseAutoCheckin({ textHint: text, attachments });
@@ -224,6 +245,12 @@ export class WeComBotService {
     }
 
     return { ok: true };
+  }
+
+  private async resolveGroupId(orgId: string, chatId?: string): Promise<string | undefined> {
+    if (!chatId?.trim()) return undefined;
+    const group = await this.prisma.weComGroup.findFirst({ where: { orgId, chatId, status: "active" }, select: { id: true } });
+    return group?.id;
   }
 
   private normalizeCheckinRecognition(recognition: RecognitionResultDto): RecognitionResultDto {

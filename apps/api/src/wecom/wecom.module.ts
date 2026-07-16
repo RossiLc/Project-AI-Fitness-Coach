@@ -3,6 +3,7 @@ import { AiModule } from "../ai/ai.module.js";
 import { CheckinsModule } from "../checkins/checkins.module.js";
 import { LeaderboardsModule } from "../leaderboards/leaderboards.module.js";
 import { MembersModule } from "../members/members.module.js";
+import { GroupsModule } from "../groups/groups.module.js";
 import { BotIntentRouterService } from "./bot-intent-router.service.js";
 import { CoachSafetyService } from "./coach-safety.service.js";
 import { LocalGuardrailService } from "./local-guardrail.service.js";
@@ -16,7 +17,7 @@ import { WeComMessageSender } from "./wecom-message.sender.js";
 import { WeComService } from "./wecom.service.js";
 
 @Module({
-  imports: [AiModule, CheckinsModule, LeaderboardsModule, MembersModule],
+  imports: [AiModule, CheckinsModule, LeaderboardsModule, MembersModule, GroupsModule],
   controllers: [WeComController, WeComAppController],
   providers: [WeComService, WeComMessageSender, WeComBotService, WeComStreamBotService, BotIntentRouterService, CoachSafetyService, LocalGuardrailService, WeComConfigService, WeComAppService],
   exports: [WeComService, WeComMessageSender, WeComBotService, WeComStreamBotService, WeComConfigService, WeComAppService]

@@ -23,10 +23,9 @@ export class WeComAppService {
     const secretConfigured = Boolean(this.config.get<string>("WECOM_APP_SECRET"));
     const callbackUrl = this.config.get<string>("WECOM_APP_CALLBACK_URL") ?? this.config.get<string>("WECOM_OAUTH_CALLBACK_URL");
     const ready = corpIdConfigured && agentIdConfigured && secretConfigured;
-    const mockMode = this.config.get<string>("WECOM_MOCK_MODE") !== "false";
 
     return {
-      mode: mockMode ? "mock" : ready ? "configured" : "missing_config",
+      mode: ready ? "configured" : "missing_config",
       corpIdConfigured,
       agentIdConfigured,
       secretConfigured,
@@ -46,7 +45,7 @@ export class WeComAppService {
       return {
         mode: "missing_config",
         state,
-        message: "缺少 WECOM_CORP_ID、WECOM_AGENT_ID 或 WECOM_APP_CALLBACK_URL，暂不能生成真实 OAuth URL。"
+        message: "缺少 WECOM_CORP_ID、WECOM_AGENT_ID 或 WECOM_APP_CALLBACK_URL，暂不能生成企业微信 OAuth URL。"
       };
     }
 
@@ -60,11 +59,12 @@ export class WeComAppService {
   }
 
   async handleOAuthCallback(body: WeComOAuthCallbackRequest, members: Pick<MembersService, "findByWeComUserid">): Promise<WeComOAuthCallbackResponse> {
-    const userid = body.code.startsWith("mock:") || this.config.get<string>("WECOM_MOCK_MODE") !== "false" ? body.code.replace(/^mock:/, "") : await this.fetchUseridByCode(body.code);
+    const isTestCode = body.code.startsWith("mock:");
+    const userid = isTestCode ? body.code.replace(/^mock:/, "") : await this.fetchUseridByCode(body.code);
     const user = await members.findByWeComUserid(userid);
     if (!user) {
       return {
-        mode: this.config.get<string>("WECOM_MOCK_MODE") === "false" ? "wecom_api" : "mock",
+        mode: isTestCode ? "mock" : "wecom_api",
         user: {
           id: "unbound",
           orgId: "org_demo",
@@ -72,26 +72,18 @@ export class WeComAppService {
           role: "employee" as CurrentUser["role"],
           wecomUserid: userid
         },
-        message: "企业微信 userid 未绑定，请联系企业管理员在成员映射页处理。"
+        message: "企业微信 userid 未绑定，请联系管理员在成员管理中处理。"
       };
     }
 
     return {
-      mode: this.config.get<string>("WECOM_MOCK_MODE") === "false" ? "wecom_api" : "mock",
+      mode: isTestCode ? "mock" : "wecom_api",
       user,
       message: "OAuth 回调已完成，本地用户已按企业微信 userid 映射。"
     };
   }
 
   async sendAppMessage(body: WeComAppMessageRequest): Promise<WeComAppMessageResult> {
-    if (this.config.get<string>("WECOM_MOCK_MODE") !== "false") {
-      return {
-        mode: "mock",
-        ok: true,
-        message: `mock 自建应用消息已发送给 ${body.toUserId}：${body.text}`
-      };
-    }
-
     const token = await this.getAccessToken();
     const response = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${encodeURIComponent(token)}`, {
       method: "POST",

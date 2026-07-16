@@ -8,27 +8,27 @@ import { PrismaService } from "../prisma/prisma.service.js";
 export class ActivitiesService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async getCurrentActivity() {
+  async getCurrentActivity(groupId?: string) {
     return this.prisma.activity.findFirst({
-      where: { status: "active" },
+      where: { status: "active", ...(groupId ? { groupId } : {}) },
       orderBy: { startAt: "desc" }
     });
   }
 
-  async getCurrentConfig(): Promise<ActivityConfigDto | null> {
-    const activity = await this.getCurrentActivity();
+  async getCurrentConfig(groupId?: string): Promise<ActivityConfigDto | null> {
+    const activity = await this.getCurrentActivity(groupId);
     return activity ? toConfigDto(activity) : null;
   }
 
-  async listConfigs(orgId: string): Promise<ActivityConfigDto[]> {
+  async listConfigs(orgId: string, groupId?: string): Promise<ActivityConfigDto[]> {
     const activities = await this.prisma.activity.findMany({
-      where: { orgId },
+      where: { orgId, ...(groupId ? { groupId } : {}) },
       orderBy: [{ status: "asc" }, { startAt: "desc" }]
     });
     return activities.map((activity) => toConfigDto(activity));
   }
 
-  async createConfig(orgId: string, body: CreateActivityConfigRequest): Promise<ActivityConfigDto> {
+  async createConfig(orgId: string, body: CreateActivityConfigRequest, groupId?: string): Promise<ActivityConfigDto> {
     const name = body.name.trim();
     const content = body.content.trim();
     const { startAt, endAt } = parseActivityPeriod(body.startAt, body.endAt);
@@ -36,13 +36,19 @@ export class ActivitiesService {
       throw new ApiException("ACTIVITY_CONFIG_INVALID", "活动名称和活动内容不能为空");
     }
 
+    await this.prisma.activity.updateMany({
+      where: { orgId, status: ActivityStatus.Active, ...(groupId ? { groupId } : { groupId: null }) },
+      data: { status: ActivityStatus.Paused }
+    });
+
     const activity = await this.prisma.activity.create({
       data: {
         orgId,
+        groupId,
         name,
         startAt,
         endAt,
-        status: ActivityStatus.Draft,
+        status: ActivityStatus.Active,
         reminderTime: "20:00",
         ruleJson: {
           content

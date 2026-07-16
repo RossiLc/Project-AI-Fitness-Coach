@@ -57,8 +57,7 @@ async function seedBaseData(prisma) {
         id: "wecom_cfg_demo",
         orgId: org.id,
         botName: "Open Fit 示例群机器人",
-        status: process.env.WECOM_MOCK_MODE === "false" ? "pending" : "mock",
-        webhookUrl: process.env.WECOM_BOT_WEBHOOK_URL || null
+        status: "pending"
       }
     ],
     skipDuplicates: true

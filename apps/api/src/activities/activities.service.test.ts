@@ -76,10 +76,15 @@ describe("ActivitiesService", () => {
     expect(result[0]).toMatchObject({ id: "act_demo", name: "July Challenge", content: "活动内容" });
   });
 
-  it("creates draft activity config with name and content", async () => {
+  it("creates active activity config with name and content and pauses previous active activity in the same scope", async () => {
     const createdRecords: Array<Record<string, unknown>> = [];
+    const updateManyCalls: Array<Record<string, unknown>> = [];
     const prisma = {
       activity: {
+        updateMany: async (args: Record<string, unknown>) => {
+          updateManyCalls.push(args);
+          return { count: 1 };
+        },
         create: async ({ data }: { data: Record<string, unknown> }) => {
           createdRecords.push(data);
           return {
@@ -107,12 +112,16 @@ describe("ActivitiesService", () => {
       id: "act_new",
       name: "九月运动打卡",
       content: "每天提交运动内容和图片。",
-      status: "draft"
+      status: "active"
+    });
+    expect(updateManyCalls[0]).toMatchObject({
+      where: { orgId: "org_demo", groupId: null, status: "active" },
+      data: { status: "paused" }
     });
     expect(createdRecords[0]).toMatchObject({
       orgId: "org_demo",
       name: "九月运动打卡",
-      status: "draft",
+      status: "active",
       startAt: new Date("2026-09-01T00:00:00.000Z"),
       endAt: new Date("2026-09-30T23:59:59.999Z"),
       reminderTime: "20:00",
@@ -123,6 +132,9 @@ describe("ActivitiesService", () => {
   it("rejects activity config when end date is before start date", async () => {
     const prisma = {
       activity: {
+        updateMany: async () => {
+          throw new Error("should not pause");
+        },
         create: async () => {
           throw new Error("should not create");
         }

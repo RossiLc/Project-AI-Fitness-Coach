@@ -149,7 +149,7 @@ export interface WeComTestMessageRequest {
 }
 
 export interface WeComSendResult {
-  mode: "mock" | "webhook";
+  mode: "intelligent_bot";
   ok: boolean;
   message: string;
 }
@@ -165,6 +165,39 @@ export interface MemberDto {
   mappingStatus: "bound" | "unbound";
 }
 
+export interface WeComGroupDto {
+  id: string;
+  orgId: string;
+  name: string;
+  chatId?: string;
+  bindCode: string;
+  status: "pending_binding" | "active" | "archived";
+  memberCount: number;
+  lastSeenAt?: string;
+  createdAt: string;
+}
+
+export interface CreateWeComGroupRequest {
+  name: string;
+}
+
+export interface ImportGroupMembersByNameRequest {
+  namesText: string;
+}
+
+export interface WeComDirectoryMemberDto {
+  userid: string;
+  name: string;
+  department?: string;
+}
+
+export interface ImportGroupMembersByNameResult {
+  groupId: string;
+  matched: Array<{ name: string; userid: string; memberId: string; department?: string }>;
+  duplicates: Array<{ name: string; candidates: WeComDirectoryMemberDto[] }>;
+  notFound: string[];
+}
+
 export interface MemberCheckinHistoryDto {
   member: MemberDto;
   checkins: AdminCheckinDto[];
@@ -174,7 +207,7 @@ export interface GroupMissingCheckinReminderResult {
   activityId: string;
   date: string;
   missingCount: number;
-  mode: "mock" | "webhook";
+  mode: "intelligent_bot";
   ok: boolean;
   message: string;
 }
@@ -184,7 +217,7 @@ export interface BindWeComUseridRequest {
 }
 
 export interface SyncWeComMembersResponse {
-  mode: "mock" | "wecom_api";
+  mode: "missing_config" | "wecom_api";
   totalLocalMembers: number;
   created: number;
   updated: number;
@@ -192,7 +225,7 @@ export interface SyncWeComMembersResponse {
 }
 
 export interface WeComAppStatusDto {
-  mode: "mock" | "configured" | "missing_config";
+  mode: "configured" | "missing_config";
   corpIdConfigured: boolean;
   agentIdConfigured: boolean;
   secretConfigured: boolean;

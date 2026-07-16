@@ -5,16 +5,41 @@ import type {
   CreateActivityConfigRequest,
   DashboardSummary,
   GroupMissingCheckinReminderResult,
+  ImportGroupMembersByNameResult,
   MemberCheckinHistoryDto,
   MemberDto,
   ReminderTaskDto,
-  UpdateActivityConfigRequest
+  UpdateActivityConfigRequest,
+  WeComGroupDto
 } from "@openfit/shared";
 import { apiFetch } from "./client";
 import { buildApiUrl } from "./client";
 
-export function getDashboardSummary() {
-  return apiFetch<DashboardSummary>("/api/admin/dashboard/summary");
+function withGroup(path: string, groupId?: string, hasQuery = false) {
+  if (!groupId) return path;
+  return `${path}${hasQuery ? "&" : "?"}groupId=${encodeURIComponent(groupId)}`;
+}
+
+export function getGroups() {
+  return apiFetch<WeComGroupDto[]>("/api/admin/groups");
+}
+
+export function createGroup(name: string) {
+  return apiFetch<WeComGroupDto>("/api/admin/groups", {
+    method: "POST",
+    body: JSON.stringify({ name })
+  });
+}
+
+export function importGroupMembers(groupId: string, namesText: string) {
+  return apiFetch<ImportGroupMembersByNameResult>(`/api/admin/groups/${encodeURIComponent(groupId)}/import-members`, {
+    method: "POST",
+    body: JSON.stringify({ namesText })
+  });
+}
+
+export function getDashboardSummary(groupId?: string) {
+  return apiFetch<DashboardSummary>(withGroup("/api/admin/dashboard/summary", groupId));
 }
 
 export function getReminderTasks() {
@@ -42,16 +67,16 @@ export function sendPersonalReminder(id: string) {
   });
 }
 
-export function sendGroupMissingCheckinReminder() {
-  return apiFetch<GroupMissingCheckinReminderResult>("/api/admin/reminders/group-missing-checkins", {
+export function sendGroupMissingCheckinReminder(groupId?: string) {
+  return apiFetch<GroupMissingCheckinReminderResult>(withGroup("/api/admin/reminders/group-missing-checkins", groupId), {
     method: "POST",
     body: JSON.stringify({})
   });
 }
 
-export function getMembers(missingToday = false) {
-  const query = missingToday ? "?missingToday=true" : "";
-  return apiFetch<MemberDto[]>(`/api/admin/members${query}`);
+export function getMembers(missingToday = false, groupId?: string) {
+  const path = `/api/admin/members${missingToday ? "?missingToday=true" : ""}`;
+  return apiFetch<MemberDto[]>(withGroup(path, groupId, missingToday));
 }
 
 export function getMemberCheckins(id: string) {
@@ -80,16 +105,16 @@ export function restoreCheckin(id: string) {
   });
 }
 
-export function getActivityConfig() {
-  return apiFetch<ActivityConfigDto | null>("/api/activities/current/config");
+export function getActivityConfig(groupId?: string) {
+  return apiFetch<ActivityConfigDto | null>(withGroup("/api/activities/current/config", groupId));
 }
 
-export function getActivityConfigs() {
-  return apiFetch<ActivityConfigDto[]>("/api/activities/configs");
+export function getActivityConfigs(groupId?: string) {
+  return apiFetch<ActivityConfigDto[]>(withGroup("/api/activities/configs", groupId));
 }
 
-export function createActivityConfig(body: CreateActivityConfigRequest) {
-  return apiFetch<ActivityConfigDto>("/api/activities/configs", {
+export function createActivityConfig(body: CreateActivityConfigRequest, groupId?: string) {
+  return apiFetch<ActivityConfigDto>(withGroup("/api/activities/configs", groupId), {
     method: "POST",
     body: JSON.stringify(body)
   });

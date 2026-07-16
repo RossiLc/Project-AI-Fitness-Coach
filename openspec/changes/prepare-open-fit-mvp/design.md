@@ -4,13 +4,16 @@
 
 当前实现阶段采用方案 B：员工端不提供 Web 使用入口，普通员工只通过企业微信两个智能机器人完成核心流程；Web 收敛为单管理员运营后台。此前设计中的员工 Web 区、企业微信配置页、角色权限页和系统设置页不再作为当前 Web 产品面向用户的页面。
 
-单管理员 Web 后台保留四个模块：
+单管理员 Web 后台以企业微信群作为工作空间边界，标准工作路径是：群管理 -> 选择当前群 -> 运营看板 / 成员管理 / 活动配置 / 排行榜管理。没有当前群时，后续模块不可用并展示空态。
+
+单管理员 Web 后台保留五个模块：
+- 群管理：创建待绑定群、展示绑定口令、保存企业微信智能机器人入站 `chatid`、选择当前群、通过中文名导入群成员。
 - 运营看板：今日打卡人数、未打卡人数、总人数、打卡率。
 - 成员管理：成员列表、今日未打卡筛选、成员打卡明细、打卡作废/恢复、提醒未打卡。
 - 活动配置：当前活动规则配置，并作为 AI 教练活动知识来源。
 - 排行榜管理：参与天数排行榜，支持后续扩展其他排行榜。
 
-提醒未打卡的群消息默认不公开未打卡成员名单，只推送未打卡人数和打卡行动提示。
+提醒未打卡必须基于当前群成员计算，并通过当前群绑定的打卡助手长连接发送到该群；当前实现会在群消息中 @ 未打卡成员的企业微信 userid。
 
 ## Context
 
@@ -105,7 +108,7 @@ Open Fit 是企业健身活动的“企业微信群参与入口 + 记录系统 +
 | Web 工作台 | 三类角色导航、今日打卡闭环、运营看板、提醒任务、企业微信配置页骨架 | 完整高保真 UI、全部后台 CRUD、复杂权限后台 |
 | 后端 API | 健康检查、mock auth、当前活动、文本打卡、我的记录、dashboard、提醒任务、企业微信测试发送 | 真实企业微信 OAuth、通讯录同步、完整活动配置 |
 | 数据模型 | Prisma 首批核心表、seed 数据、状态枚举、配置表和审计表骨架 | 全部索引优化、复杂保留策略、图片治理完整实现 |
-| 企业微信 | 群机器人 webhook 测试发送，支持 mock 模式和真实 webhook 模式 | 自建应用个人消息、生产 OAuth、成员 userid 自动同步 |
+| 企业微信 | 智能机器人长连接入站、打卡助手长连接主动群推送、群 `chatid` 捕获 | 自建应用个人消息、生产 OAuth、成员 userid 自动同步 |
 | Worker | BullMQ 队列、企业微信消息 job、测试小贴士/示例周榜触发 | 完整未打卡扫描、周榜正式调度、复杂重试运营 |
 | AI | 规则解析器模拟文本识别，保留 AI adapter 边界 | 真实模型调用、健康咨询完整分类、图片识别 |
 | 文件 | 本地上传目录和鉴权访问路由占位，禁止静态公开 | 真实图片上传、缩略图、删除清理任务 |
@@ -134,7 +137,7 @@ Open Fit 是企业健身活动的“企业微信群参与入口 + 记录系统 +
 
 推荐技术栈：Vue 3、TypeScript、Vite、Node.js、NestJS、PostgreSQL、Redis/BullMQ、Prisma、本地磁盘存储、Docker Compose。
 
-AI 联调约定：第一阶段保留 OpenAI-compatible 配置入口。AI 教练咨询不使用模拟 AI 回复：高风险问题由安全围栏直接拒答，低风险问题必须调用真实模型；未配置 `AI_BASE_URL` 或 `AI_API_KEY` 时返回明确的未配置提示。用户已确认后续使用 GPT-5.5，代码和环境变量预留 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL=gpt-5.5`，联调时由用户直接替换 `.env` 中的 URL 和 key。`AI_MOCK_MODE` 仅用于打卡解析、图片识别等开发降级链路。
+AI 联调约定：第一阶段保留 OpenAI-compatible 配置入口。AI 教练咨询、企业微信图片打卡和图文打卡识别都不使用模拟 AI 结果：高风险问题由安全围栏直接拒答，低风险咨询必须调用真实模型；图片/图文打卡必须调用真实多模态模型识别运动类型、运动时长和消耗能量。未配置 `AI_BASE_URL` 或 `AI_API_KEY` 时返回明确的未配置或识别失败提示，不创建伪造打卡记录。用户已确认后续使用 GPT-5.5，代码和环境变量预留 `AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL=gpt-5.5`，联调时由用户直接替换 `.env` 中的 URL 和 key。
 
 AI 教练本地安全围栏选型：第一阶段不额外部署独立 guardrail 服务，采用 API 进程内轻量组件。`LocalGuardrailService` 组合 `@andersmyrmel/vard`、`sensitive-word-tool`、Open Fit 中文提示词注入规则、PII/secret 正则和健康高风险规则；`CoachSafetyService` 在企业微信 AI 教练和 Web Coach API 中统一复用。安全围栏执行输入和输出双向校验：输入未通过时不调用真实 AI Provider；模型输出命中密钥泄漏、系统提示词泄漏、敏感词、PII 或健康高风险时替换为安全提示。
 
@@ -409,7 +412,7 @@ Open Fit 面向员工提供两个企业微信智能机器人入口：`Open Fit �
 8. AI 教练意图先经过健康安全围栏；高风险内容使用拒答模板且不调用模型，低风险内容调用 OpenAI-compatible 真实模型，并通过系统提示词约束为低风险、非医疗建议。
 9. 回复内容只包含本人打卡结果、公开规则或低风险建议，不在群内公开未打卡名单、健康咨询原文或敏感备注。
 
-企业微信联调约定：第一阶段预留长连接配置 `WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`；群机器人出站保留 `WECOM_BOT_WEBHOOK_URL`。开发阶段不提交真实值，联调时由用户替换 `.env`。
+企业微信联调约定：第一阶段预留长连接配置 `WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`。后台群推送通过打卡助手智能机器人长连接主动发送，目标群 `chatid` 来自群内 @ 打卡助手消息。开发阶段不提交真实值，联调时由用户替换 `.env`。
 
 ### 群机器人
 
@@ -614,7 +617,7 @@ invalid
 ## Operations
 
 - 开发环境：Docker Compose 启动 PostgreSQL、Redis、api-server、worker、web-workbench，并挂载本地上传目录。
-- 环境变量：`DATABASE_URL`、`REDIS_URL`、`WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_APP_SECRET`、`WECOM_BOT_WEBHOOK_URL`、`WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`LOCAL_STORAGE_ROOT`、`LOCAL_STORAGE_PUBLIC_BASE`。
+- 环境变量：`DATABASE_URL`、`REDIS_URL`、`WECOM_CORP_ID`、`WECOM_APP_SECRET`、`WECOM_CHECKIN_BOT_ID`、`WECOM_CHECKIN_BOT_SECRET`、`WECOM_COACH_BOT_ID`、`WECOM_COACH_BOT_SECRET`、`WECOM_INTELLIGENT_BOT_WS_URL`、`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`LOCAL_STORAGE_ROOT`、`LOCAL_GUARDRAIL_MAX_INPUT_LENGTH`、`LOCAL_GUARDRAIL_EXTRA_WORDS`。
 - 任务调度：BullMQ repeatable jobs 管理每日小贴士、提醒、周榜。
 - 日志：结构化 JSON 日志，包含 `request_id`、`member_id`、`activity_id`、`job_id`。
 - 监控：任务失败数、企业微信发送失败率、AI 调用失败率、打卡提交成功率。

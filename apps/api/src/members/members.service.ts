@@ -50,6 +50,7 @@ type CheckinHistoryRow = {
 interface ListMembersOptions {
   missingToday?: boolean;
   date?: Date;
+  groupId?: string;
 }
 
 @Injectable()
@@ -60,13 +61,21 @@ export class MembersService {
   ) {}
 
   async list(orgId: string, options: ListMembersOptions = {}): Promise<MemberDto[]> {
-    const members = await this.prisma.member.findMany({
-      where: { orgId, ...(options.missingToday ? { status: "active" } : {}) },
-      orderBy: { createdAt: "asc" }
-    });
+    const members = options.groupId
+      ? (
+          await this.prisma.weComGroupMember.findMany({
+            where: { groupId: options.groupId, status: "active", group: { orgId } },
+            include: { member: true },
+            orderBy: { createdAt: "asc" }
+          })
+        ).map((item) => item.member)
+      : await this.prisma.member.findMany({
+          where: { orgId, ...(options.missingToday ? { status: "active" } : {}) },
+          orderBy: { createdAt: "asc" }
+        });
     if (!options.missingToday) return members.map(toDto);
 
-    const activity = await this.prisma.activity.findFirst({ where: { orgId, status: "active" }, orderBy: { startAt: "desc" } });
+    const activity = await this.prisma.activity.findFirst({ where: { orgId, status: "active", ...(options.groupId ? { groupId: options.groupId } : {}) }, orderBy: { startAt: "desc" } });
     if (!activity) return members.map(toDto);
 
     const { start, end } = getDayRange(options.date ?? new Date());
@@ -131,12 +140,12 @@ export class MembersService {
   }
 
   async syncFromWeComMock(orgId: string): Promise<SyncWeComMembersResponse> {
-    if (this.config?.get<string>("WECOM_MOCK_MODE") === "false") {
+    if (this.config?.get<string>("WECOM_CORP_ID") && this.config?.get<string>("WECOM_APP_SECRET")) {
       return this.syncFromWeComApi(orgId);
     }
     const totalLocalMembers = await this.prisma.member.count({ where: { orgId } });
     return {
-      mode: "mock",
+      mode: "missing_config",
       totalLocalMembers,
       created: 0,
       updated: 0,

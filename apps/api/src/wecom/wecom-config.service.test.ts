@@ -13,8 +13,6 @@ describe("WeComConfigService", () => {
     vi.stubEnv("WECOM_CHECKIN_BOT_SECRET", "checkin-secret");
     vi.stubEnv("WECOM_COACH_BOT_ID", "coach-bot");
     vi.stubEnv("WECOM_COACH_BOT_SECRET", "coach-secret");
-    vi.stubEnv("WECOM_BOT_WEBHOOK_URL", "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=demo");
-
     const config = new WeComConfigService().getConfig();
 
     expect(config.intelligentBotWsUrl).toBe("wss://openws.work.weixin.qq.com");
@@ -23,6 +21,5 @@ describe("WeComConfigService", () => {
     expect(config.checkinBotSecret).toBe("checkin-secret");
     expect(config.coachBotId).toBe("coach-bot");
     expect(config.coachBotSecret).toBe("coach-secret");
-    expect(config.groupBotWebhookUrl).toContain("qyapi.weixin.qq.com");
   });
 });

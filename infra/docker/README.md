@@ -1,6 +1,6 @@
 # Open Fit 第一阶段本地启动
 
-第一阶段目标是启动 PostgreSQL、Redis、API、worker 和 Web 工作台，并支持企业微信群机器人 mock 或真实 webhook 测试发送。
+第一阶段目标是启动 PostgreSQL、Redis、API、worker 和 Web 工作台，并支持企业微信智能机器人长连接接收消息与主动群推送。
 
 ## 环境文件
 
@@ -10,17 +10,20 @@
 Copy-Item .env.example .env
 ```
 
-默认 `WECOM_MOCK_MODE=true`，不会请求真实企业微信。若要测试真实群机器人：
+企业微信默认使用智能机器人长连接。若要联调两个机器人：
 
 ```env
-WECOM_MOCK_MODE=false
-WECOM_BOT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...
+WECOM_CHECKIN_BOT_ID=你的打卡助手BotID
+WECOM_CHECKIN_BOT_SECRET=你的打卡助手Secret
+WECOM_COACH_BOT_ID=你的AI教练BotID
+WECOM_COACH_BOT_SECRET=你的AI教练Secret
 ```
+
+后台“提醒未打卡”通过打卡助手智能机器人的长连接 `sendMessage` 主动推送到群。首次使用前，需要先在目标群里 @Open Fit 打卡助手发送任意消息，系统会保存该群 `chatid` 作为后续推送目标。
 
 AI 教练和企业微信打卡识别不提供 mock AI 结果。联调 GPT-5.5 时替换：
 
 ```env
-AI_PROVIDER=openai-compatible
 AI_BASE_URL=https://你的模型服务地址/v1
 AI_API_KEY=你的key
 AI_MODEL=gpt-5.5

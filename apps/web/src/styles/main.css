@@ -141,11 +141,12 @@ th, td {
   color: rgba(255, 250, 240, 0.68);
 }
 
-.role-switcher {
+.role-switcher,
+.group-switcher {
   margin-bottom: 24px;
 }
 
-.role-switcher label, .nav p {
+.role-switcher label, .group-switcher label, .nav p {
   display: block;
   margin: 18px 0 8px;
   color: rgba(255, 250, 240, 0.62);
@@ -154,7 +155,8 @@ th, td {
   text-transform: uppercase;
 }
 
-.role-switcher select {
+.role-switcher select,
+.group-switcher select {
   width: 100%;
   min-height: 38px;
   border: 1px solid rgba(255, 250, 240, 0.22);

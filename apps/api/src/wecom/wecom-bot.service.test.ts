@@ -16,7 +16,7 @@ function response(payload: unknown, ok = true) {
   };
 }
 
-function createService(options: { modelAnswer?: string; imageRecognition?: Record<string, unknown>; imageParseError?: Error } = {}) {
+function createService(options: { modelAnswer?: string; imageRecognition?: Record<string, unknown>; imageParseError?: Error; boundGroup?: Record<string, unknown> | null } = {}) {
   const user: CurrentUser = {
     id: "employee_demo",
     orgId: "org_demo",
@@ -26,6 +26,8 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
   const createdCheckins: unknown[] = [];
   const createdAttachments: unknown[] = [];
   const createdMembers: unknown[] = [];
+  const groupBindings: unknown[] = [];
+  const groupObservations: unknown[] = [];
   const imageParses: unknown[] = [];
   const coachAdviceQuestions: string[] = [];
   const prisma = {
@@ -86,7 +88,7 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
           createdAt: new Date()
         };
       }
-    }
+    },
   };
   const aiParser = {
     parseImage: async (input: unknown) => {
@@ -117,10 +119,20 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
     }
   };
   return {
-    service: new WeComBotService(prisma as never, checkins, new BotIntentRouterService(), new CoachSafetyService(), aiParser as never, aiProvider as never),
+    service: new WeComBotService(prisma as never, checkins, new BotIntentRouterService(), new CoachSafetyService(), aiParser as never, aiProvider as never, {
+      bindFromWeComMessage: async (...args: unknown[]) => {
+        groupBindings.push(args);
+        return options.boundGroup ?? null;
+      },
+      observeMemberByChat: async (...args: unknown[]) => {
+        groupObservations.push(args);
+      }
+    } as never),
     createdCheckins,
     createdAttachments,
     createdMembers,
+    groupBindings,
+    groupObservations,
     imageParses,
     coachAdviceQuestions
   };
@@ -149,8 +161,67 @@ describe("WeComBotService", () => {
     expect(createdCheckins).toHaveLength(0);
   });
 
+  it("passes inbound group chat id to group binding and member observation", async () => {
+    const { service, groupBindings, groupObservations } = createService();
+
+    await service.handleEvent({
+      messageId: "msg_group_chat",
+      fromUserId: "wecom_user_001",
+      text: "activity rules",
+      botRole: "coach",
+      chatId: "group-chat-1"
+    } as never);
+
+    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "activity rules"]);
+    expect(groupObservations[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001"]);
+  });
+
+  it("打卡助手收到有效绑定口令时完成群绑定，不进入图片打卡校验", async () => {
+    const { service, groupBindings, groupObservations, createdCheckins } = createService({
+      boundGroup: {
+        id: "group_1",
+        orgId: "org_demo",
+        name: "测试打卡群",
+        bindCode: "OF-1CA0A9",
+        status: "active",
+        memberCount: 1,
+        createdAt: new Date().toISOString()
+      }
+    });
+
+    const result = await service.handleEvent({
+      messageId: "msg_bind_group",
+      fromUserId: "wecom_user_001",
+      text: "@Open Fit 打卡助手 绑定群 OF-1CA0A9",
+      botRole: "checkin",
+      chatId: "group-chat-1"
+    } as never);
+
+    expect(result.text).toContain("群绑定成功");
+    expect(result.text).toContain("OF-1CA0A9");
+    expect(result.text).not.toContain("补发打卡图片");
+    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "@Open Fit 打卡助手 绑定群 OF-1CA0A9"]);
+    expect(groupObservations).toHaveLength(0);
+    expect(createdCheckins).toHaveLength(0);
+  });
+
+  it("打卡助手收到无法绑定的口令时提示检查口令，不进入图片打卡校验", async () => {
+    const { service, createdCheckins } = createService();
+
+    const result = await service.handleEvent({
+      messageId: "msg_bind_group_missing",
+      fromUserId: "wecom_user_001",
+      text: "绑定群 OF-NOTFND",
+      botRole: "checkin",
+      chatId: "group-chat-1"
+    } as never);
+
+    expect(result.text).toContain("未找到可绑定的群");
+    expect(result.text).not.toContain("补发打卡图片");
+    expect(createdCheckins).toHaveLength(0);
+  });
+
   it("uses WeCom user detail API to enrich auto-provisioned member profile", async () => {
-    vi.stubEnv("WECOM_MOCK_MODE", "false");
     vi.stubEnv("WECOM_CORP_ID", "corp_demo");
     vi.stubEnv("WECOM_APP_SECRET", "secret_demo");
     const fetchMock = vi.fn(async (url: string) => {

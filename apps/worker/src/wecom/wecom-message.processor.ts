@@ -28,18 +28,10 @@ export class WeComMessageProcessor implements OnModuleInit, OnModuleDestroy {
   }
 
   async process(job: Job<WeComMessageJob>) {
-    const mockMode = process.env.WECOM_MOCK_MODE !== "false";
-    if (mockMode) {
-      return {
-        mode: "mock",
-        ok: true,
-        message: `worker mock 已发送：${job.data.text}`
-      };
-    }
     return {
-      mode: "pending-webhook",
+      mode: "api-intelligent-bot",
       ok: false,
-      message: "第一阶段真实 webhook 发送由 API WeComMessageSender 承担，worker 已保留队列边界。"
+      message: `企业微信群主动推送由 API 进程内的智能机器人长连接发送器承担，worker 仅保留队列边界：${job.data.text}`
     };
   }
 }

@@ -5,6 +5,7 @@ import { AuthModule } from "./auth/auth.module.js";
 import { CheckinsModule } from "./checkins/checkins.module.js";
 import { DashboardModule } from "./dashboard/dashboard.module.js";
 import { FilesModule } from "./files/files.module.js";
+import { GroupsModule } from "./groups/groups.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { MembersModule } from "./members/members.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
@@ -28,6 +29,7 @@ import { LeaderboardsModule } from "./leaderboards/leaderboards.module.js";
     AiModule,
     AuditModule,
     FilesModule,
+    GroupsModule,
     WeComModule
   ],
   controllers: [HealthController]

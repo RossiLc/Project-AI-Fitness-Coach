@@ -1,5 +1,6 @@
 <template>
-  <section class="panel activity-page">
+  <section v-if="!groupId" class="empty">请先在群管理中新增并选择一个群。</section>
+  <section v-else class="panel activity-page">
     <div class="panel-heading">
       <div>
         <span class="eyebrow">Activity</span>
@@ -83,9 +84,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
 import type { ActivityConfigDto, UpdateActivityConfigRequest } from "@openfit/shared";
 import { createActivityConfig, getActivityConfigs, updateActivityConfig } from "../../api/admin";
+import { getCurrentGroupId, onCurrentGroupChange } from "../../api/group-context";
 
 const mode = ref<"list" | "form">("list");
 const configs = ref<ActivityConfigDto[]>([]);
@@ -93,6 +95,7 @@ const selected = ref<ActivityConfigDto | null>(null);
 const message = ref("");
 const error = ref("");
 const saving = ref(false);
+const groupId = ref(getCurrentGroupId());
 
 const form = reactive<UpdateActivityConfigRequest>({
   name: "",
@@ -102,9 +105,10 @@ const form = reactive<UpdateActivityConfigRequest>({
 });
 
 async function load() {
+  if (!groupId.value) return;
   error.value = "";
   try {
-    configs.value = await getActivityConfigs();
+    configs.value = await getActivityConfigs(groupId.value);
     if (selected.value) {
       selected.value = configs.value.find((item) => item.id === selected.value?.id) ?? selected.value;
     }
@@ -158,7 +162,7 @@ async function save() {
   const isEditing = Boolean(selected.value);
   try {
     const payload = { name: form.name.trim(), content: form.content.trim(), startAt: form.startAt, endAt: form.endAt };
-    const saved = isEditing && selected.value ? await updateActivityConfig(selected.value.id, payload) : await createActivityConfig(payload);
+    const saved = isEditing && selected.value ? await updateActivityConfig(selected.value.id, payload) : await createActivityConfig(payload, groupId.value);
     configs.value = isEditing ? configs.value.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...configs.value];
     selected.value = saved;
     message.value = isEditing ? "活动已保存" : "活动已创建";
@@ -202,7 +206,15 @@ function statusLabel(value: string) {
   }[value] ?? value;
 }
 
-onMounted(load);
+let stop = () => {};
+onMounted(() => {
+  stop = onCurrentGroupChange((next) => {
+    groupId.value = next;
+    void load();
+  });
+  void load();
+});
+onUnmounted(() => stop());
 </script>
 
 <style scoped>
