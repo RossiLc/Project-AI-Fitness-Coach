@@ -73,6 +73,7 @@ model Member {
   leaderboardEntries LeaderboardEntry[]
   coachAdviceLogs CoachAdviceLog[]
   coachConversations CoachConversation[]
+  coachProfileMemories CoachProfileMemory[]
   wecomGroupMembers WeComGroupMember[]
 
   @@unique([orgId, wecomUserid])
@@ -223,6 +224,21 @@ model CoachConversationMessage {
   conversation   CoachConversation @relation(fields: [conversationId], references: [id])
 
   @@index([conversationId, createdAt])
+}
+
+model CoachProfileMemory {
+  id           String   @id @default(cuid())
+  orgId        String
+  memberId     String
+  wecomUserid  String
+  profileJson  Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  member       Member   @relation(fields: [memberId], references: [id])
+
+  @@unique([memberId])
+  @@index([orgId, wecomUserid])
+  @@index([updatedAt])
 }
 
 model ReminderTask {

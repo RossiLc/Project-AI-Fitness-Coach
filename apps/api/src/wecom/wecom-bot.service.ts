@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { BotIntent, MemberRole, type CurrentUser, type RecognitionResultDto, type WeComBotAttachment, type WeComBotEventRequest, type WeComBotEventResponse, type WeComBotRole, type WeComGroupDto } from "@openfit/shared";
 import { AiCheckinParserService } from "../ai/ai-checkin-parser.service.js";
 import { CoachConversationService, type CoachConversationMessageInput } from "../ai/coach-conversation.service.js";
+import { CoachProfileMemoryService } from "../ai/coach-profile-memory.service.js";
 import { AiProviderService } from "../ai/ai-provider.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
 import { GroupsService } from "../groups/groups.service.js";
@@ -32,7 +33,8 @@ export class WeComBotService {
     @Inject(AiCheckinParserService) private readonly aiParser: AiCheckinParserService,
     @Inject(AiProviderService) private readonly aiProvider: AiProviderService,
     @Inject(GroupsService) private readonly groups: GroupsService,
-    @Optional() @Inject(CoachConversationService) private readonly conversations?: CoachConversationService
+    @Optional() @Inject(CoachConversationService) private readonly conversations?: CoachConversationService,
+    @Optional() @Inject(CoachProfileMemoryService) private readonly profiles?: CoachProfileMemoryService
   ) {}
 
   async handleEvent(body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
@@ -357,6 +359,10 @@ export class WeComBotService {
 
     const context = await this.conversations?.buildContext({ orgId: user.orgId, memberId: user.id, wecomUserid, chatId: body.chatId });
     const messages: CoachConversationMessageInput[] = [];
+    const profilePrompt = await this.profiles?.buildProfilePrompt({ orgId: user.orgId, memberId: user.id, wecomUserid });
+    if (profilePrompt) {
+      messages.push({ role: "system", content: profilePrompt });
+    }
     if (context?.summary) {
       messages.push({ role: "system", content: `以下是当前用户此前与 AI 教练的会话摘要，只用于理解追问上下文：\n${context.summary}` });
     }
@@ -370,6 +376,13 @@ export class WeComBotService {
         memberId: user.id,
         wecomUserid,
         chatId: body.chatId,
+        userText: text,
+        assistantText: safeText
+      });
+      await this.profiles?.updateFromExchange({
+        orgId: user.orgId,
+        memberId: user.id,
+        wecomUserid,
         userText: text,
         assistantText: safeText
       });

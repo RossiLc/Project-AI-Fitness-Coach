@@ -6,6 +6,7 @@ import { BotIntent, CheckinStatus, MemberRole, type CurrentUser } from "@openfit
 import { RuleRecognizerService } from "../checkins/rule-recognizer.service.js";
 import { CheckinsService } from "../checkins/checkins.service.js";
 import { CoachConversationService } from "../ai/coach-conversation.service.js";
+import { CoachProfileMemoryService } from "../ai/coach-profile-memory.service.js";
 import { BotIntentRouterService } from "./bot-intent-router.service.js";
 import { CoachSafetyService } from "./coach-safety.service.js";
 import { WeComBotService } from "./wecom-bot.service.js";
@@ -27,6 +28,7 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
   const coachAdviceMessages: Array<Array<{ role: string; content: string }>> = [];
   const coachConversations: Array<Record<string, any>> = [];
   const coachConversationMessages: Array<Record<string, any>> = [];
+  const coachProfileMemories: Array<Record<string, any>> = [];
   let coachConversationSeq = 0;
   let coachConversationMessageSeq = 0;
   const prisma = {
@@ -135,6 +137,22 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
         }
         return { count: before - coachConversationMessages.length };
       }
+    },
+    coachProfileMemory: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        coachProfileMemories.find((profile) =>
+          Object.entries(where).every(([key, value]) => (value === undefined ? true : profile[key] === value))
+        ) ?? null,
+      upsert: async ({ where, create, update }: { where: { id: string }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        const existing = coachProfileMemories.find((profile) => profile.id === where.id);
+        if (existing) {
+          Object.assign(existing, update);
+          return existing;
+        }
+        const profile = { ...create, createdAt: new Date(), updatedAt: create.updatedAt ?? new Date() };
+        coachProfileMemories.push(profile);
+        return profile;
+      }
     }
   };
   const aiParser = {
@@ -184,7 +202,7 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
       observeMemberByChat: async (...args: unknown[]) => {
         groupObservations.push(args);
       }
-    } as never, new CoachConversationService(prisma as never)),
+    } as never, new CoachConversationService(prisma as never), new CoachProfileMemoryService(prisma as never)),
     createdCheckins,
     createdAttachments,
     createdMembers,
@@ -192,7 +210,8 @@ function createService(options: { modelAnswer?: string; imageRecognition?: Recor
     groupObservations,
     imageParses,
     coachAdviceQuestions,
-    coachAdviceMessages
+    coachAdviceMessages,
+    coachProfileMemories
   };
 }
 
@@ -609,5 +628,21 @@ describe("WeComBotService", () => {
     expect(result.text).toContain("安全策略");
     expect(result.text).not.toContain("sk-test");
     expect(coachAdviceMessages[0].at(-1)).toEqual({ role: "user", content: "玉米多少大卡热量" });
+  });
+  it("AI coach injects stable structured profile memory into later model calls", async () => {
+    const { service, coachAdviceMessages, coachProfileMemories } = createService();
+
+    await service.handleEvent({ messageId: "msg_profile_a", fromUserId: "wecom_user_001", chatId: "group_1", text: "我的目标是减脂，喜欢爬坡，但是膝盖不舒服", botRole: "coach" } as never);
+    await service.handleEvent({ messageId: "msg_profile_b", fromUserId: "wecom_user_001", chatId: "group_1", text: "今天适合怎么练", botRole: "coach" } as never);
+
+    expect(coachProfileMemories[0].profileJson).toMatchObject({
+      goals: ["减脂"],
+      preferences: ["爬坡"],
+      constraints: ["膝盖不适"]
+    });
+    expect(coachAdviceMessages[1][0]).toMatchObject({ role: "system" });
+    expect(coachAdviceMessages[1][0].content).toContain("用户长期结构化画像");
+    expect(coachAdviceMessages[1][0].content).toContain("减脂");
+    expect(coachAdviceMessages[1][0].content).toContain("爬坡");
   });
 });

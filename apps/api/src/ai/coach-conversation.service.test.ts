@@ -19,6 +19,11 @@ function createPrisma() {
               conversation.wecomUserid === where.wecomUserid &&
               (where.chatId === undefined ? conversation.chatId === null : conversation.chatId === where.chatId)
           ) ?? null,
+        findMany: async ({ where }: any) =>
+          conversations.filter((conversation) => {
+            if (where.lastMessageAt?.lt) return conversation.lastMessageAt < where.lastMessageAt.lt;
+            return true;
+          }),
         create: async ({ data }: any) => {
           const conversation = { id: `conv_${++conversationSeq}`, ...data, createdAt: new Date(), lastMessageAt: data.lastMessageAt ?? new Date() };
           conversations.push(conversation);
@@ -32,7 +37,12 @@ function createPrisma() {
         },
         deleteMany: async ({ where }: any) => {
           const ids = conversations
-            .filter((item) => Object.entries(where).every(([key, value]) => item[key] === value))
+            .filter((item) =>
+              Object.entries(where).every(([key, value]) => {
+                if (value && typeof value === "object" && "lt" in (value as Record<string, unknown>)) return item[key] < (value as { lt: Date }).lt;
+                return item[key] === value;
+              })
+            )
             .map((item) => item.id);
           for (let index = conversations.length - 1; index >= 0; index -= 1) {
             if (ids.includes(conversations[index].id)) conversations.splice(index, 1);
@@ -132,5 +142,41 @@ describe("CoachConversationService", () => {
 
     expect(cleared).toBe(true);
     expect(context.messages).toHaveLength(0);
+  });
+  it("does not return context after the conversation has been idle for more than 3 days", async () => {
+    const store = createPrisma();
+    const now = new Date("2026-07-17T12:00:00.000Z");
+    const service = new CoachConversationService(store.prisma as never, { now: () => now, conversationTtlHours: 72 });
+
+    await service.appendExchange({
+      orgId: "org_1",
+      memberId: "member_1",
+      wecomUserid: "user_a",
+      chatId: "group_1",
+      userText: "我想做一个减脂计划",
+      assistantText: "可以先从快走开始"
+    });
+    store.conversations[0].lastMessageAt = new Date("2026-07-14T11:59:59.000Z");
+
+    const context = await service.buildContext({ orgId: "org_1", memberId: "member_1", wecomUserid: "user_a", chatId: "group_1" });
+
+    expect(context).toEqual({ conversationId: null, summary: "", messages: [] });
+  });
+
+  it("deletes conversations that have not been updated for more than 30 days", async () => {
+    const store = createPrisma();
+    const now = new Date("2026-07-17T12:00:00.000Z");
+    const service = new CoachConversationService(store.prisma as never, { now: () => now, cleanupDays: 30 });
+
+    await service.appendExchange({ orgId: "org_1", memberId: "member_1", wecomUserid: "old_user", userText: "old", assistantText: "old reply" });
+    await service.appendExchange({ orgId: "org_1", memberId: "member_2", wecomUserid: "new_user", userText: "new", assistantText: "new reply" });
+    store.conversations[0].lastMessageAt = new Date("2026-06-16T12:00:00.000Z");
+    store.conversations[1].lastMessageAt = new Date("2026-06-18T12:00:00.000Z");
+
+    const result = await service.cleanupExpiredConversations();
+
+    expect(result.deletedConversations).toBe(1);
+    expect(store.conversations.map((conversation) => conversation.wecomUserid)).toEqual(["new_user"]);
+    expect(store.messages.every((message) => message.conversationId === store.conversations[0].id)).toBe(true);
   });
 });
