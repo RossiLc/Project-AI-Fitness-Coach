@@ -88,6 +88,16 @@ describe("CoachSafetyService", () => {
     expect(reply.text).toContain("咨询医生");
   });
 
+  it("allows natural safety reminders in normal coach output", () => {
+    const reply = service.validateOutput(
+      "喝酒对减脂和增肌确实会拖后腿：酒精有热量，也会影响睡眠和恢复。建议训练日前后少喝，真要喝就控制量、多喝水、别配高油夜宵。小提醒：运动有度，身体反馈优先，如果胸闷、呼吸困难或明显不舒服，就先停下来。"
+    );
+
+    expect(reply.riskLevel).toBe("normal");
+    expect(reply.text).toContain("喝酒对减脂和增肌");
+    expect(reply.tags).toContain("health_risk_context_allowed");
+  });
+
   it("提供真实模型调用使用的安全系统提示词", () => {
     const prompt = service.buildSystemPrompt();
 
@@ -100,6 +110,7 @@ describe("CoachSafetyService", () => {
 
     expect(prompt).toContain("热情、幽默、接地气");
     expect(prompt).toContain("口语化");
+    expect(prompt).toContain("500 字");
     expect(prompt).toContain("多用“你”");
     expect(prompt).toContain("善意提醒");
     expect(prompt).toContain("温和克制");

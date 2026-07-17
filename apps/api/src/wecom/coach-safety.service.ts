@@ -144,7 +144,10 @@ export class CoachSafetyService {
 
   private isSafeHealthOutput(text: string): boolean {
     const normalized = text.normalize("NFKC");
-    const hasBoundary = /(不建议|避免|停止|暂停|不要|咨询医生|就医|专业人士|非医疗建议|不是医疗建议)/i.test(normalized);
+    const hasBoundary =
+      /(不建议|避免|停止|暂停|停下来|先停|不要|别硬练|降强度|咨询医生|就医|专业人士|非医疗建议|不是医疗建议|运动有度|身体反馈优先|异常及时停止|明显不舒服)/i.test(
+        normalized
+      );
     const hasUnsafeDirective = /(继续|坚持|可以).{0,12}(高强度|剧烈|冲刺|硬撑|忍着|带病|胸痛|呼吸困难)/i.test(normalized);
     return hasBoundary && !hasUnsafeDirective;
   }
