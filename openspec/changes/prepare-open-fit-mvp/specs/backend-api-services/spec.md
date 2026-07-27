@@ -46,10 +46,11 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 - **AND** 新群 SHALL 处于 `pending_binding` 状态
 
 #### Scenario: 企业微信群绑定 chatid
-- **WHEN** 群内成员 @ Open Fit 打卡助手并发送绑定口令
+- **WHEN** 群内成员 @ Open Fit 打卡助手或 Open Fit AI 教练并发送绑定口令
 - **THEN** 后端 SHALL 将入站消息的 `chatid` 写入对应群
+- **AND** 后端 SHALL 保存本次绑定消息来自的机器人角色 `botRole`
 - **AND** 群状态 SHALL 变为 `active`
-- **AND** 后续后台主动提醒 SHALL 使用该群 `chatid` 作为发送目标
+- **AND** 后续后台主动提醒 SHALL 使用该群 `chatid` 作为发送目标，并优先使用该群绑定时记录的机器人角色发送
 
 #### Scenario: Excel userid 名册导入群成员
 - **WHEN** 管理员上传包含 `userid`、中文名称和可选部门的 Excel 名册导入群成员
@@ -95,12 +96,49 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 
 #### Scenario: 群提醒未打卡
 - **WHEN** 管理员调用 `POST /api/admin/reminders/group-missing-checkins?groupId=...`
-- **THEN** API SHALL 统计当前群今日未打卡成员并通过该群绑定的打卡助手长连接发送提醒
+- **THEN** API SHALL 统计当前群今日未打卡成员并通过该群绑定时记录的智能机器人长连接发送提醒
 - **AND** 群消息 SHALL 基于未打卡成员企业微信 userid @ 对应成员
 
 #### Scenario: 今日运营看板
 - **WHEN** Web 调用 `GET /api/admin/dashboard/summary?groupId=...`
 - **THEN** API SHALL 按当前群和当天时间范围统计今日打卡人数、未打卡人数、总人数和打卡率
+
+### Requirement: 推送管理 API
+后端 SHALL 提供推送管理 API，支持管理员维护运营推送内容，并通过企业微信智能机器人长连接发送到指定群。
+
+#### Scenario: 查询推送列表
+- **WHEN** Web 调用 `GET /api/admin/push-campaigns?groupId=...`
+- **THEN** API SHALL 返回当前组织当前群的推送列表
+- **AND** 列表 SHALL 按创建时间倒序排列
+
+#### Scenario: 新增或编辑推送
+- **WHEN** Web 调用 `POST /api/admin/push-campaigns` 或 `PUT /api/admin/push-campaigns/:id`
+- **THEN** API SHALL 校验推送内容非空、目标群存在且属于当前组织
+- **AND** 若提交每日推送和固定推送时段，API SHALL 按北京时间将其转换为下一次到期的 `scheduledAt`，状态 SHALL 为 `scheduled`
+- **AND** 若提交指定日期推送，API SHALL 按北京时间将指定日期和固定推送时段转换为一次性 `scheduledAt`，状态 SHALL 为 `scheduled`
+- **AND** 固定推送时段 SHALL 只接受 `09:00`、`12:00` 和 `18:00`
+- **AND** 若选择不自动推送，状态 SHALL 为 `draft`
+
+#### Scenario: 手动立即推送
+- **WHEN** Web 调用 `POST /api/admin/push-campaigns/:id/send-now`
+- **THEN** API SHALL 通过目标群绑定时记录的 Open Fit 智能机器人长连接发送推送内容
+- **AND** 发送成功后 SHALL 将状态更新为 `sent`，记录最近发送时间并清空失败原因
+- **AND** 目标群未绑定 chatid 或发送失败时 SHALL 将状态更新为 `failed` 并记录失败原因
+- **AND** 手动立即推送失败时 API SHALL 返回非 2xx 响应，错误码为 `PUSH_CAMPAIGN_SEND_FAILED`，并在错误 detail 中包含已更新后的推送记录
+
+#### Scenario: 删除推送计划
+- **WHEN** Web 调用 `DELETE /api/admin/push-campaigns/:id`
+- **THEN** API SHALL 校验该推送计划属于当前组织
+- **AND** API SHALL 删除该推送计划
+- **AND** 推送计划不存在或不属于当前组织时 SHALL 返回明确错误
+
+#### Scenario: 派发到期自动推送
+- **WHEN** worker 调用 `POST /api/internal/push-campaigns/dispatch-due`
+- **THEN** API SHALL 扫描 `scheduledAt <= now` 且状态为 `scheduled` 的推送
+- **AND** API SHALL 逐条发送并记录成功或失败状态
+- **AND** 单条推送失败 SHALL NOT 中断本次到期扫描
+- **AND** 每日推送成功后 SHALL 保持 `scheduled` 状态并滚动到下一天同一北京时间时段
+- **AND** 指定日期推送成功后 SHALL 标记为 `sent` 并清空下一次执行时间
 
 ### Requirement: 后端 API 分组
 
@@ -119,6 +157,11 @@ Docker 环境中的 API 服务 SHALL 在启动 NestJS 前自动确保数据库�
 
 - **WHEN** worker 发送企业微信消息失败
 - **THEN** 系统必须记录失败原因、重试次数，并在超过阈值后标记为失败或人工处理
+
+#### Scenario: worker 派发运营推送
+- **WHEN** worker 周期扫描运营推送
+- **THEN** worker SHALL 调用 API 内部到期派发接口
+- **AND** worker SHALL NOT 直接依赖 API 源码模块或企业微信 webhook
 
 ### Requirement: 稳定业务错误码
 

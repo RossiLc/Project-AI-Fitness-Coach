@@ -1,4 +1,4 @@
-import type { BotIntent, CheckinStatus, MemberRole, ReminderStatus } from "./status.js";
+import type { BotIntent, CheckinStatus, MemberRole, PushCampaignStatus, ReminderStatus } from "./status.js";
 
 export interface CurrentUser {
   id: string;
@@ -116,6 +116,48 @@ export interface ReminderTaskDto {
   lastError?: string;
 }
 
+export interface PushCampaignDto {
+  id: string;
+  orgId: string;
+  groupId: string;
+  groupName: string;
+  content: string;
+  scheduleType: PushCampaignScheduleType;
+  scheduleSlot?: PushCampaignScheduleSlot;
+  scheduleDate?: string;
+  scheduledAt?: string;
+  status: PushCampaignStatus;
+  lastSentAt?: string;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PushCampaignScheduleSlot = string;
+export type PushCampaignScheduleType = "draft" | "daily" | "once";
+
+export interface CreatePushCampaignRequest {
+  groupId: string;
+  content: string;
+  scheduleType?: PushCampaignScheduleType;
+  scheduleSlot?: PushCampaignScheduleSlot;
+  scheduleDate?: string;
+}
+
+export interface UpdatePushCampaignRequest {
+  groupId?: string;
+  content?: string;
+  scheduleType?: PushCampaignScheduleType;
+  scheduleSlot?: PushCampaignScheduleSlot | null;
+  scheduleDate?: string | null;
+}
+
+export interface DispatchDuePushCampaignsResult {
+  scanned: number;
+  sent: number;
+  failed: number;
+}
+
 export interface LeaderboardEntryDto {
   rank: number;
   memberId: string;
@@ -171,6 +213,7 @@ export interface WeComGroupDto {
   name: string;
   chatId?: string;
   bindCode: string;
+  botRole: WeComBotRole;
   status: "pending_binding" | "active" | "archived";
   memberCount: number;
   lastSeenAt?: string;

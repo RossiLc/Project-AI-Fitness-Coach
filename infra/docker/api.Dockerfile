@@ -27,7 +27,7 @@ RUN --mount=type=cache,id=openfit-pnpm-store,target=/root/.local/share/pnpm/stor
   pnpm --filter @openfit/api dev:db:generate \
   && pnpm --filter @openfit/shared build \
   && pnpm --filter @openfit/api build \
-  && pnpm --filter @openfit/api deploy --prod /prod/api \
+  && pnpm --offline --filter @openfit/api deploy --prod /prod/api \
   && mkdir -p /prod/api/prisma \
   && cp apps/api/prisma/schema.prisma /prod/api/prisma/schema.prisma \
   && cd /prod/api \

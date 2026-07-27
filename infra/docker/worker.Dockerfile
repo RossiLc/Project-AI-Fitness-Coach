@@ -25,7 +25,7 @@ COPY apps/worker apps/worker
 RUN --mount=type=cache,id=openfit-pnpm-store,target=/root/.local/share/pnpm/store \
   pnpm --filter @openfit/shared build \
   && pnpm --filter @openfit/worker build \
-  && pnpm --filter @openfit/worker deploy --prod /prod/worker
+  && pnpm --offline --filter @openfit/worker deploy --prod /prod/worker
 
 FROM node:22-alpine AS runtime
 

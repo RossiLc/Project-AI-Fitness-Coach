@@ -12,3 +12,5 @@ storage/uploads/*
 .worktrees
 coverage
 *.log
+.tmp-*
+**/.tmp-*

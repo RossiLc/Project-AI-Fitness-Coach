@@ -46,6 +46,14 @@ enum ReminderStatus {
   manual
 }
 
+enum PushCampaignStatus {
+  draft
+  scheduled
+  sent
+  failed
+  cancelled
+}
+
 model Organization {
   id          String       @id @default(cuid())
   name        String
@@ -55,6 +63,7 @@ model Organization {
   activities  Activity[]
   wecomConfigs WeComConfig[]
   wecomGroups WeComGroup[]
+  pushCampaigns PushCampaign[]
 }
 
 model Member {
@@ -167,15 +176,38 @@ model WeComGroup {
   name         String
   chatId       String?      @unique
   bindCode     String       @unique
+  botRole      String       @default("checkin")
   status       String       @default("pending_binding")
   lastSeenAt   DateTime     @default(now())
   createdAt    DateTime     @default(now())
   organization Organization @relation(fields: [orgId], references: [id])
   members      WeComGroupMember[]
   activities   Activity[]
+  pushCampaigns PushCampaign[]
 
   @@index([orgId, status])
   @@index([orgId, lastSeenAt])
+}
+
+model PushCampaign {
+  id          String             @id @default(cuid())
+  orgId       String
+  groupId     String
+  content     String
+  scheduleType String             @default("draft")
+  scheduleSlot String?
+  scheduleDate String?
+  scheduledAt DateTime?
+  status      PushCampaignStatus @default(draft)
+  lastSentAt  DateTime?
+  lastError   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  organization Organization      @relation(fields: [orgId], references: [id])
+  group       WeComGroup         @relation(fields: [groupId], references: [id])
+
+  @@index([orgId, groupId, createdAt])
+  @@index([status, scheduledAt])
 }
 
 model WeComGroupMember {

@@ -9,6 +9,7 @@ import { GroupsModule } from "./groups/groups.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { MembersModule } from "./members/members.module.js";
 import { PrismaModule } from "./prisma/prisma.module.js";
+import { PushCampaignsModule } from "./push-campaigns/push-campaigns.module.js";
 import { RemindersModule } from "./reminders/reminders.module.js";
 import { WeComModule } from "./wecom/wecom.module.js";
 import { AiModule } from "./ai/ai.module.js";
@@ -26,6 +27,7 @@ import { LeaderboardsModule } from "./leaderboards/leaderboards.module.js";
     LeaderboardsModule,
     DashboardModule,
     RemindersModule,
+    PushCampaignsModule,
     AiModule,
     AuditModule,
     FilesModule,

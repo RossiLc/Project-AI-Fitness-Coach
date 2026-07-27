@@ -19,6 +19,7 @@
           <th>群名称</th>
           <th>状态</th>
           <th>绑定口令</th>
+          <th>绑定机器人</th>
           <th>chatid</th>
           <th>成员数</th>
           <th>操作</th>
@@ -29,6 +30,7 @@
           <td><strong>{{ group.name }}</strong></td>
           <td><span class="status-pill">{{ statusLabel(group.status) }}</span></td>
           <td class="breakable">{{ group.bindCode }}</td>
+          <td>{{ botRoleLabel(group.botRole) }}</td>
           <td class="breakable">{{ group.chatId ?? "未绑定" }}</td>
           <td>{{ group.memberCount }}</td>
           <td>
@@ -37,7 +39,7 @@
         </tr>
       </tbody>
     </table>
-    <div v-else class="empty">还没有群。请先新增群，然后在目标企业微信群里 @Open Fit 打卡助手发送绑定口令。</div>
+    <div v-else class="empty">还没有群。请先新增群，然后在目标企业微信群里 @ 当前启用的 Open Fit 智能机器人发送绑定口令。</div>
 
     <div v-if="currentGroup" class="member-import">
       <h3>导入当前群成员</h3>
@@ -102,7 +104,7 @@ async function create() {
     groups.value = [group, ...groups.value];
     select(group.id);
     newName.value = "";
-    message.value = `群已创建。请在目标企业微信群里发送：@Open Fit 打卡助手 绑定群 ${group.bindCode}`;
+    message.value = `群已创建。请在目标企业微信群里 @ 当前启用的 Open Fit 智能机器人发送：绑定群 ${group.bindCode}`;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "群创建失败";
   }
@@ -149,6 +151,10 @@ async function importMembersByFile() {
 
 function statusLabel(status: string) {
   return { pending_binding: "待绑定", active: "已绑定", archived: "已归档" }[status] ?? status;
+}
+
+function botRoleLabel(role: string) {
+  return { checkin: "打卡助手", coach: "AI 教练" }[role] ?? role;
 }
 
 onMounted(load);

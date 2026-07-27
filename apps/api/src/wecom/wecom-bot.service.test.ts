@@ -249,7 +249,7 @@ describe("WeComBotService", () => {
       chatId: "group-chat-1"
     } as never);
 
-    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "activity rules"]);
+    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "activity rules", "coach"]);
     expect(groupObservations[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001"]);
   });
 
@@ -262,7 +262,8 @@ describe("WeComBotService", () => {
         bindCode: "OF-1CA0A9",
         status: "active",
         memberCount: 1,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        botRole: "checkin"
       }
     });
 
@@ -277,8 +278,35 @@ describe("WeComBotService", () => {
     expect(result.text).toContain("群绑定成功");
     expect(result.text).toContain("OF-1CA0A9");
     expect(result.text).not.toContain("补发打卡图片");
-    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "@Open Fit 打卡助手 绑定群 OF-1CA0A9"]);
+    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "@Open Fit 打卡助手 绑定群 OF-1CA0A9", "checkin"]);
     expect(groupObservations).toHaveLength(0);
+    expect(createdCheckins).toHaveLength(0);
+  });
+
+  it("AI 教练收到有效绑定口令时将群绑定为 coach 通道", async () => {
+    const { service, groupBindings, createdCheckins } = createService({
+      boundGroup: {
+        id: "group_1",
+        orgId: "org_demo",
+        name: "测试 AI 教练群",
+        bindCode: "OF-B0CCD5",
+        status: "active",
+        memberCount: 1,
+        createdAt: new Date().toISOString(),
+        botRole: "coach"
+      }
+    });
+
+    const result = await service.handleEvent({
+      messageId: "msg_bind_coach_group",
+      fromUserId: "wecom_user_001",
+      text: "OF-B0CCD5 @Open Fit AI教练",
+      botRole: "coach",
+      chatId: "group-chat-1"
+    } as never);
+
+    expect(result.text).toContain("群绑定成功");
+    expect(groupBindings[0]).toEqual(["org_demo", "group-chat-1", "wecom_user_001", "OF-B0CCD5 @Open Fit AI教练", "coach"]);
     expect(createdCheckins).toHaveLength(0);
   });
 

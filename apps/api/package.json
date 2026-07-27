@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "node dist/apps/api/src/main.js",
-    "build": "nest build",
+    "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -31,7 +31,6 @@
     "sensitive-word-tool": "^1.1.10"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.4.8",
     "@nestjs/testing": "^10.4.15",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",

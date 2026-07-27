@@ -4,7 +4,7 @@ import { MemberRole, type CurrentUser } from "@openfit/shared";
 const adminUser: CurrentUser = {
   id: "admin_demo",
   orgId: "org_demo",
-  displayName: "管理员",
+  displayName: "管理员：无敌美少女",
   role: MemberRole.OrgAdmin
 };
 

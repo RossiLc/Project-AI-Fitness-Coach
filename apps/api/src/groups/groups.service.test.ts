@@ -21,10 +21,10 @@ describe("GroupsService", () => {
     };
     const service = new GroupsService(prisma as never);
 
-    const group = await service.bindFromWeComMessage("org_demo", "chat_abc", "luocheng", "@Open Fit 打卡助手 绑定群 OF-123456");
+    const group = await service.bindFromWeComMessage("org_demo", "chat_abc", "luocheng", "@Open Fit AI教练 绑定群 OF-123456", "coach");
 
     expect(group?.id).toBe("group_1");
-    expect(updates[0]).toMatchObject({ chatId: "chat_abc", status: "active" });
+    expect(updates[0]).toMatchObject({ chatId: "chat_abc", status: "active", botRole: "coach" });
   });
 
   it("treats an already active group bind code as idempotent success", async () => {
@@ -46,10 +46,10 @@ describe("GroupsService", () => {
     };
     const service = new GroupsService(prisma as never);
 
-    const group = await service.bindFromWeComMessage("org_demo", "chat_abc", "zhangsan", "@Open Fit 打卡助手 OF-123456");
+    const group = await service.bindFromWeComMessage("org_demo", "chat_abc", "zhangsan", "@Open Fit AI教练 OF-123456", "coach");
 
     expect(group?.status).toBe("active");
-    expect(updates[0]).toMatchObject({ chatId: "chat_abc", status: "active" });
+    expect(updates[0]).toMatchObject({ chatId: "chat_abc", status: "active", botRole: "coach" });
   });
 
   it("imports Excel rows by userid and upserts existing members", async () => {

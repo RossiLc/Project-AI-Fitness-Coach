@@ -8,6 +8,14 @@
 
 - **WHEN** 开发者准备创建 Prisma schema 或数据库迁移
 - **THEN** 能从方案中找到每张核心表的用途、关键字段、状态枚举和关系
+- **AND** 运营推送内容 SHALL 使用独立 `PushCampaign` 表保存，不复用 `ReminderTask`
+- **AND** `WeComGroup` SHALL 保存绑定群 `chatId` 和绑定消息来源机器人角色 `botRole`，用于后续主动群推送选择正确长连接通道
+
+#### Scenario: 保存运营推送内容
+- **WHEN** 管理员新增推送内容
+- **THEN** `PushCampaign` SHALL 保存 `orgId`、`groupId`、`content`、`scheduleType`、`scheduleSlot`、可选 `scheduleDate`、由北京时间计划计算出的 `scheduledAt`、`status`、`lastSentAt`、`lastError`、`createdAt` 和 `updatedAt`
+- **AND** `status` SHALL 支持 `draft`、`scheduled`、`sent`、`failed`、`cancelled`
+- **AND** 数据模型 SHALL 支持按 `orgId + groupId + createdAt` 查询列表，并按 `status + scheduledAt` 扫描到期自动推送
 
 ### Requirement: 状态枚举与索引
 

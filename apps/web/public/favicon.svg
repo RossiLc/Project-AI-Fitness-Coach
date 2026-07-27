@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Open Fit">
+  <defs>
+    <linearGradient id="openfit-bg" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2f7d57" />
+      <stop offset="0.55" stop-color="#188579" />
+      <stop offset="1" stop-color="#d16c4c" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#fffaf0" />
+  <path d="M19 13h26c3.3 0 6 2.7 6 6v26c0 3.3-2.7 6-6 6H19c-3.3 0-6-2.7-6-6V19c0-3.3 2.7-6 6-6Z" fill="url(#openfit-bg)" />
+  <path d="M22 36c0-8.3 4.2-14 10-14s10 5.7 10 14-4.2 14-10 14-10-5.7-10-14Zm7 0c0 4.7 1.1 7.5 3 7.5s3-2.8 3-7.5-1.1-7.5-3-7.5-3 2.8-3 7.5Z" fill="#fffaf0" />
+  <path d="M39 19h10v6h-5v8h5v6h-5v11h-5V19Z" fill="#fffaf0" />
+  <path d="M17 21c5.4-6.3 15.1-8.4 23.1-4.5" fill="none" stroke="#fffaf0" stroke-width="3.5" stroke-linecap="round" opacity="0.9" />
+</svg>

@@ -4,7 +4,8 @@ export enum ApiErrorCode {
   CheckinNotFound = "CHECKIN_NOT_FOUND",
   UnauthorizedRole = "UNAUTHORIZED_ROLE",
   WeComWebhookNotConfigured = "WECOM_WEBHOOK_NOT_CONFIGURED",
-  WeComSendFailed = "WECOM_SEND_FAILED"
+  WeComSendFailed = "WECOM_SEND_FAILED",
+  PushCampaignSendFailed = "PUSH_CAMPAIGN_SEND_FAILED"
 }
 
 export interface ApiErrorPayload {

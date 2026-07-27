@@ -46,7 +46,7 @@ export class WeComBotService {
 
     const role = this.resolveBotRole(body);
     if (role) {
-      const boundGroup = await this.groups.bindFromWeComMessage(user.orgId, body.chatId, body.fromUserId, body.text);
+      const boundGroup = await this.groups.bindFromWeComMessage(user.orgId, body.chatId, body.fromUserId, body.text, role);
       if (boundGroup) return this.remember(body.messageId, this.buildGroupBoundResponse(boundGroup));
       if (this.containsBindCode(body.text)) {
         return this.remember(body.messageId, this.text(BotIntent.Unknown, "未找到可绑定的群。请确认口令是否正确、是否已经绑定，口令格式类似：OF-1CA0A9。推荐发送：绑定群 OF-1CA0A9"));

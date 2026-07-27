@@ -5,7 +5,7 @@
         <span class="brand-mark">OF</span>
         <div>
           <strong>Open Fit</strong>
-          <small>管理员工作台</small>
+          <small>“无敌美少女”的工作台</small>
         </div>
       </div>
 
@@ -26,6 +26,7 @@
         <RouterLink to="/admin/members">成员管理</RouterLink>
         <RouterLink to="/admin/activity">活动配置</RouterLink>
         <RouterLink to="/admin/leaderboards">排行榜管理</RouterLink>
+        <RouterLink to="/admin/pushes">推送管理</RouterLink>
       </nav>
     </aside>
 
@@ -36,7 +37,7 @@
           <h1>Open Fit 管理员工作台</h1>
         </div>
         <div class="user-chip">
-          <span>{{ me?.displayName ?? "管理员" }}</span>
+          <span>{{ me?.displayName ?? "管理员：无敌美少女" }}</span>
           <small>{{ currentGroupName }}</small>
         </div>
       </header>

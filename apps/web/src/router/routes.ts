@@ -5,6 +5,7 @@ import GroupManagement from "../pages/admin/GroupManagement.vue";
 import LeaderboardManagement from "../pages/admin/LeaderboardManagement.vue";
 import MemberDetail from "../pages/admin/MemberDetail.vue";
 import Members from "../pages/admin/Members.vue";
+import PushManagement from "../pages/admin/PushManagement.vue";
 
 export const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/admin/dashboard" },
@@ -13,5 +14,6 @@ export const routes: RouteRecordRaw[] = [
   { path: "/admin/members", component: Members },
   { path: "/admin/members/:id", component: MemberDetail, props: true },
   { path: "/admin/activity", component: ActivityConfig },
-  { path: "/admin/leaderboards", component: LeaderboardManagement }
+  { path: "/admin/leaderboards", component: LeaderboardManagement },
+  { path: "/admin/pushes", component: PushManagement }
 ];

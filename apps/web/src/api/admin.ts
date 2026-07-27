@@ -9,6 +9,9 @@ import type {
   ImportGroupMembersByUseridResult,
   MemberCheckinHistoryDto,
   MemberDto,
+  PushCampaignDto,
+  CreatePushCampaignRequest,
+  UpdatePushCampaignRequest,
   ReminderTaskDto,
   UpdateActivityConfigRequest,
   WeComGroupDto
@@ -72,6 +75,37 @@ export function sendGroupMissingCheckinReminder(groupId?: string) {
   return apiFetch<GroupMissingCheckinReminderResult>(withGroup("/api/admin/reminders/group-missing-checkins", groupId), {
     method: "POST",
     body: JSON.stringify({})
+  });
+}
+
+export function getPushCampaigns(groupId?: string) {
+  return apiFetch<PushCampaignDto[]>(withGroup("/api/admin/push-campaigns", groupId));
+}
+
+export function createPushCampaign(body: CreatePushCampaignRequest) {
+  return apiFetch<PushCampaignDto>("/api/admin/push-campaigns", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export function updatePushCampaign(id: string, body: UpdatePushCampaignRequest) {
+  return apiFetch<PushCampaignDto>(`/api/admin/push-campaigns/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(body)
+  });
+}
+
+export function sendPushCampaignNow(id: string) {
+  return apiFetch<PushCampaignDto>(`/api/admin/push-campaigns/${encodeURIComponent(id)}/send-now`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export function deletePushCampaign(id: string) {
+  return apiFetch<{ id: string; deleted: true }>(`/api/admin/push-campaigns/${encodeURIComponent(id)}`, {
+    method: "DELETE"
   });
 }
 

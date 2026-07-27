@@ -24,6 +24,14 @@ export enum ReminderStatus {
   Manual = "manual"
 }
 
+export enum PushCampaignStatus {
+  Draft = "draft",
+  Scheduled = "scheduled",
+  Sent = "sent",
+  Failed = "failed",
+  Cancelled = "cancelled"
+}
+
 export enum ActivityStatus {
   Draft = "draft",
   Active = "active",

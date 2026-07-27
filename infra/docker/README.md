@@ -47,13 +47,15 @@ WECOM_INTELLIGENT_BOT_WS_URL=
 pnpm docker:up
 ```
 
-`docker:up` 会先构建 API、worker 和 Web 镜像。依赖安装、Prisma Client 生成和前后端编译都发生在 Docker build 阶段；容器启动后只运行编译产物。
+如果本地还没有镜像，`docker:up` 会先构建 API、worker 和 Web 镜像；如果镜像已存在则直接启动。需要强制重新构建时使用 `pnpm docker:up:build` 或 `pnpm docker:restart`。
+
+依赖安装、Prisma Client 生成和前后端编译都发生在 Docker build 阶段；容器启动后只运行编译产物。
 
 - API 容器运行 `dist/apps/api/src/main.js`。
 - Worker 容器运行 `dist/apps/worker/src/main.js`。
 - Web 容器使用 nginx 提供 `apps/web/dist` 静态文件，并把 `/api` 反向代理到 API 容器。
 
-首次 build 需要下载依赖，耗时较长；后续未改依赖时会复用 Docker build cache。
+首次 build 需要下载依赖，耗时较长；后续未改依赖时会复用 Docker build cache。API 和 Worker 镜像在 `pnpm install --frozen-lockfile` 后，会使用 `pnpm --offline deploy --prod` 生成运行时依赖目录，避免 deploy 阶段再次访问 `registry.npmjs.org` 或镜像源元数据。API 构建使用 TypeScript 编译器 `tsc -p tsconfig.json`，不依赖 Nest CLI。
 
 ## 关闭 Docker 全部服务
 

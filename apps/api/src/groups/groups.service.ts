@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { MemberRole, type ImportGroupMemberByUseridRow, type ImportGroupMembersByUseridResult, type WeComGroupDto } from "@openfit/shared";
+import { MemberRole, type ImportGroupMemberByUseridRow, type ImportGroupMembersByUseridResult, type WeComBotRole, type WeComGroupDto } from "@openfit/shared";
 import { createHash, randomBytes } from "node:crypto";
 import { ApiException } from "../common/api-response.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -10,6 +10,7 @@ type GroupRow = {
   name: string;
   chatId: string | null;
   bindCode: string;
+  botRole?: string | null;
   status: string;
   lastSeenAt: Date | null;
   createdAt: Date;
@@ -49,7 +50,7 @@ export class GroupsService {
     return toGroupDto(group);
   }
 
-  async bindFromWeComMessage(orgId: string, chatId: string | undefined, fromUserId: string, text: string): Promise<WeComGroupDto | null> {
+  async bindFromWeComMessage(orgId: string, chatId: string | undefined, fromUserId: string, text: string, botRole: WeComBotRole = "checkin"): Promise<WeComGroupDto | null> {
     if (!chatId?.trim()) return null;
     const bindCode = this.extractBindCode(text);
     if (!bindCode) {
@@ -62,7 +63,7 @@ export class GroupsService {
 
     const group = await this.prisma.weComGroup.update({
       where: { id: pending.id },
-      data: { chatId, status: "active", lastSeenAt: new Date() },
+      data: { chatId, botRole, status: "active", lastSeenAt: new Date() },
       include: { _count: { select: { members: true } } }
     });
     await this.observeMember(orgId, group.id, fromUserId, "observed");
@@ -207,6 +208,7 @@ function toGroupDto(group: GroupRow): WeComGroupDto {
     name: group.name,
     chatId: group.chatId ?? undefined,
     bindCode: group.bindCode,
+    botRole: (group.botRole === "coach" ? "coach" : "checkin"),
     status: group.status as WeComGroupDto["status"],
     memberCount: group._count?.members ?? 0,
     lastSeenAt: group.lastSeenAt?.toISOString(),

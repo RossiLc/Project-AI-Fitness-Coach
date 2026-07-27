@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { ApiErrorCode, type WeComSendResult } from "@openfit/shared";
+import { ApiErrorCode, type WeComBotRole, type WeComSendResult } from "@openfit/shared";
 import { ApiException } from "../common/api-response.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { WeComStreamBotService } from "./wecom-stream-bot.service.js";
@@ -21,13 +21,22 @@ export class WeComMessageSender {
       throw new ApiException(ApiErrorCode.WeComWebhookNotConfigured, "尚未捕获企业微信群会话，请先在目标群里 @Open Fit 打卡助手发送任意消息后再重试");
     }
 
-    return this.streamBot.sendMarkdown("checkin", chat.chatId!, text);
+    return this.streamBot.sendMarkdown(resolveOutboundBotRole(chat.botRole), chat.chatId!, text);
   }
 
   async sendMarkdownToChat(chatId: string, text: string): Promise<WeComSendResult> {
     if (!chatId.trim()) {
       throw new ApiException(ApiErrorCode.WeComWebhookNotConfigured, "企业微信群尚未完成绑定，请先在目标群里 @Open Fit 打卡助手发送绑定口令");
     }
-    return this.streamBot.sendMarkdown("checkin", chatId, text);
+    const chat = await this.prisma.weComGroup.findFirst({ where: { chatId, status: "active" } });
+    return this.streamBot.sendMarkdown(resolveOutboundBotRole(chat?.botRole), chatId, text);
   }
+}
+
+function resolveOutboundBotRole(botRole?: string | null): WeComBotRole {
+  if (botRole === "coach") return "coach";
+  const hasCheckinBot = Boolean(process.env.WECOM_CHECKIN_BOT_ID?.trim() && process.env.WECOM_CHECKIN_BOT_SECRET?.trim());
+  const hasCoachBot = Boolean(process.env.WECOM_COACH_BOT_ID?.trim() && process.env.WECOM_COACH_BOT_SECRET?.trim());
+  if (!hasCheckinBot && hasCoachBot) return "coach";
+  return "checkin";
 }
