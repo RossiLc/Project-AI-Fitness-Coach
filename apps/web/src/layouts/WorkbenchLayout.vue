@@ -27,6 +27,7 @@
         <RouterLink to="/admin/activity">活动配置</RouterLink>
         <RouterLink to="/admin/leaderboards">排行榜管理</RouterLink>
         <RouterLink to="/admin/pushes">推送管理</RouterLink>
+        <RouterLink to="/admin/direct-message">单聊推送</RouterLink>
       </nav>
     </aside>
 

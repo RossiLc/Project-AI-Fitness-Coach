@@ -184,8 +184,7 @@ export class PushCampaignsService {
       });
       return toDto(updated);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "企业微信推送失败";
-      return this.markFailed(campaign.id, message);
+      return this.markFailed(campaign.id, getErrorMessage(error));
     }
   }
 
@@ -266,6 +265,14 @@ function buildBeijingDateTime(date: string, slot: PushCampaignScheduleSlot): Dat
 
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
+}
+
+function getErrorMessage(error: unknown): string {
+  if (typeof error === "object" && error && "getResponse" in error && typeof error.getResponse === "function") {
+    const response = error.getResponse() as { error?: { message?: unknown } };
+    if (typeof response.error?.message === "string" && response.error.message.trim()) return response.error.message;
+  }
+  return error instanceof Error && error.message.trim() ? error.message : "企业微信推送失败";
 }
 
 function toDto(campaign: PushCampaignRow): PushCampaignDto {

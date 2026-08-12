@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { CurrentUser, WeComTestMessageRequest } from "@openfit/shared";
+import type { CurrentUser, WeComDirectMessageRequest, WeComTestMessageRequest } from "@openfit/shared";
 import { Prisma } from "@prisma/client";
 import { LeaderboardsService } from "../leaderboards/leaderboards.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -33,6 +33,15 @@ export class WeComService {
         : ["暂无有效打卡数据"];
     const result = await this.sender.sendMarkdown(`本周运动榜：\n${lines.join("\n")}\n榜单仅展示活动统计所需信息。`);
     await this.recordAudit(user, "wecom.weekly_leaderboard", result);
+    return result;
+  }
+
+  async sendDirectMessage(user: CurrentUser, body: WeComDirectMessageRequest) {
+    const result = await this.sender.sendMarkdownToUser(body.targetUserid, body.content);
+    await this.recordAudit(user, "wecom.direct_message", {
+      targetUserid: body.targetUserid,
+      result
+    });
     return result;
   }
 

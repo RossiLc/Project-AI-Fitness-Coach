@@ -190,6 +190,11 @@ export interface WeComTestMessageRequest {
   previewText: string;
 }
 
+export interface WeComDirectMessageRequest {
+  targetUserid: string;
+  content: string;
+}
+
 export interface WeComSendResult {
   mode: "intelligent_bot";
   ok: boolean;

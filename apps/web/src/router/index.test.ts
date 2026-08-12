@@ -9,4 +9,8 @@ describe("web router", () => {
   it("提供推送管理路由", () => {
     expect(routes.some((route) => route.path === "/admin/pushes")).toBe(true);
   });
+
+  it("提供单聊推送独立模块路由", () => {
+    expect(routes.some((route) => route.path === "/admin/direct-message")).toBe(true);
+  });
 });

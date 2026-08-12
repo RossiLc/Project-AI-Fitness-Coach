@@ -21,5 +21,14 @@ describe("WeComConfigService", () => {
     expect(config.checkinBotSecret).toBe("checkin-secret");
     expect(config.coachBotId).toBe("coach-bot");
     expect(config.coachBotSecret).toBe("coach-secret");
+    expect(config.streamAppReconnectDelayMs).toBe(60_000);
+  });
+
+  it("支持配置企业微信智能机器人应用层重连间隔", () => {
+    vi.stubEnv("WECOM_STREAM_APP_RECONNECT_DELAY_MS", "15000");
+
+    const config = new WeComConfigService().getConfig();
+
+    expect(config.streamAppReconnectDelayMs).toBe(15_000);
   });
 });

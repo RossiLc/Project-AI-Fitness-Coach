@@ -33,6 +33,9 @@ services:
       dockerfile: infra/docker/api.Dockerfile
     image: openfit-api:local
     container_name: openfit-api
+    dns:
+      - ${DOCKER_DNS_PRIMARY:-223.5.5.5}
+      - ${DOCKER_DNS_SECONDARY:-119.29.29.29}
     env_file:
       - ../../.env
     environment:

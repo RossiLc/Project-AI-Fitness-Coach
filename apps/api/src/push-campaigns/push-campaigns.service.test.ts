@@ -290,6 +290,32 @@ describe("PushCampaignsService", () => {
     expect(updatedData?.lastError).toContain("93001");
   });
 
+  it("records business error message when WeCom stream is reconnecting", async () => {
+    let updatedData: Record<string, unknown> | undefined;
+    const prisma = {
+      pushCampaign: {
+        findFirst: async () => baseCampaign,
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updatedData = data;
+          return { ...baseCampaign, ...data, group: baseCampaign.group };
+        }
+      }
+    };
+    const sender = {
+      sendMarkdownToChat: async () => {
+        throw new ApiException("WECOM_SEND_FAILED", "企业微信智能机器人 coach 长连接正在自动重连，请稍后重试");
+      }
+    };
+    const service = new PushCampaignsService(prisma as never, sender as never);
+
+    await expect(service.sendNow("org_demo", "push_1")).rejects.toMatchObject({
+      code: "PUSH_CAMPAIGN_SEND_FAILED"
+    });
+
+    expect(updatedData).toMatchObject({ status: "failed" });
+    expect(updatedData?.lastError).toContain("正在自动重连");
+  });
+
   it("dispatches due daily campaigns and schedules next day in Beijing time", async () => {
     const sent: string[] = [];
     const updated: Array<Record<string, unknown>> = [];

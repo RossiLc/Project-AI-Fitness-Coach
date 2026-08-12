@@ -154,4 +154,36 @@ describe("WeComStreamBotService", () => {
     expect(result.ok).toBe(true);
     expect(result.mode).toBe("intelligent_bot");
   });
+
+  it("SDK reconnect exhausted 后应用层会重建长连接", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("WECOM_STREAM_APP_RECONNECT_DELAY_MS", "1000");
+    vi.stubEnv("WECOM_COACH_BOT_ID", "coach-bot");
+    vi.stubEnv("WECOM_COACH_BOT_SECRET", "coach-secret");
+    const first = createClient();
+    const second = createClient();
+    const factory: WeComStreamBotClientFactory = vi.fn()
+      .mockReturnValueOnce(first.client)
+      .mockReturnValueOnce(second.client);
+    const service = new WeComStreamBotService(new WeComConfigService(), new FakeWeComBotService() as never, factory);
+
+    await service.onModuleInit();
+    first.handlers.get("error")?.(Object.assign(new Error("Max reconnect attempts exceeded (10)"), { name: "WSReconnectExhaustedError" }));
+
+    await expect(service.sendMarkdown("coach", "chat-1", "hello")).rejects.toMatchObject({
+      response: {
+        error: {
+          message: expect.stringContaining("正在自动重连")
+        }
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(first.client.disconnect).toHaveBeenCalledOnce();
+    expect(second.client.connect).toHaveBeenCalledOnce();
+
+    vi.useRealTimers();
+  });
 });

@@ -118,4 +118,20 @@ describe("WeComMessageSender", () => {
 
     expect(streamBot.sendMarkdown).toHaveBeenCalledWith("coach", "selected-chat", "Open Fit reminder");
   });
+
+  it("sends direct markdown to a userid through AI coach", async () => {
+    const streamBot = {
+      sendMarkdown: vi.fn(async () => ({
+        mode: "intelligent_bot" as const,
+        ok: true,
+        message: "sent"
+      }))
+    };
+    const sender = new WeComMessageSender(createPrisma() as never, streamBot as never);
+
+    const result = await sender.sendMarkdownToUser("target_userid", "该打卡啦~");
+
+    expect(streamBot.sendMarkdown).toHaveBeenCalledWith("coach", "target_userid", "该打卡啦~");
+    expect(result.ok).toBe(true);
+  });
 });

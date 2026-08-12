@@ -1,5 +1,18 @@
 # Tasks
 
+## 25. AI 教练单聊推送
+
+- [x] 25.1 后端新增 AI 教练单聊推送接口，支持管理员指定企业微信 `userid` 和 Markdown 内容，通过智能机器人长连接 `sendMessage(userid, body)` 发送。
+- [x] 25.2 Web 工作台新增独立「单聊推送」模块，提供 `userid` 和推送内容表单，展示真实发送成功或失败原因。
+- [x] 25.3 单聊推送固定使用 `Open Fit AI 教练` 机器人通道，不引入企业微信自建应用消息或 webhook fallback。
+
+## 24. 企业微信长连接稳定性
+
+- [x] 24.1 定位生产日志中 `getaddrinfo EAI_AGAIN openws.work.weixin.qq.com` 为容器 DNS/外部网络解析抖动，`Max reconnect attempts exceeded (10)` 后 SDK 不再继续恢复。
+- [x] 24.2 为企业微信智能机器人 SDK 长连接增加应用层自愈：SDK 重连耗尽或主动发送发现 WebSocket 不可用时，按机器人角色标记自动重连并重建新的 SDK client。
+- [x] 24.3 主动群推送在长连接自动重连期间返回明确失败，避免后台误判发送成功。
+- [x] 24.4 为 API 容器增加可配置 Docker DNS，并在 `.env.example`、知识库中记录 `EAI_AGAIN` 排查路径。
+
 ## 23. Docker 构建稳定性
 
 - [x] 23.1 定位 Docker 构建失败根因：`pnpm deploy --prod` 在构建后段重新访问 npm registry 元数据，弱网络下会因 `ERR_PNPM_META_FETCH_FAIL` 中断。

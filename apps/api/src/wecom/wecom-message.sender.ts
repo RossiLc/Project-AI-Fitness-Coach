@@ -31,6 +31,17 @@ export class WeComMessageSender {
     const chat = await this.prisma.weComGroup.findFirst({ where: { chatId, status: "active" } });
     return this.streamBot.sendMarkdown(resolveOutboundBotRole(chat?.botRole), chatId, text);
   }
+
+  async sendMarkdownToUser(userid: string, text: string): Promise<WeComSendResult> {
+    const target = userid.trim();
+    if (!target) {
+      throw new ApiException(ApiErrorCode.WeComSendFailed, "企业微信 userid 不能为空");
+    }
+    if (!text.trim()) {
+      throw new ApiException(ApiErrorCode.WeComSendFailed, "单聊推送内容不能为空");
+    }
+    return this.streamBot.sendMarkdown("coach", target, text);
+  }
 }
 
 function resolveOutboundBotRole(botRole?: string | null): WeComBotRole {

@@ -1,5 +1,5 @@
 import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
-import { MemberRole, type CurrentUser, type WeComTestMessageRequest } from "@openfit/shared";
+import { MemberRole, type CurrentUser, type WeComDirectMessageRequest, type WeComTestMessageRequest } from "@openfit/shared";
 import { CurrentUserDecorator } from "../auth/current-user.decorator.js";
 import { AllowRoles } from "../auth/role-guard.factory.js";
 import { WeComService } from "./wecom.service.js";
@@ -24,5 +24,11 @@ export class WeComController {
   @UseGuards(AllowRoles(MemberRole.OrgAdmin))
   weeklyLeaderboard(@CurrentUserDecorator() user: CurrentUser) {
     return this.wecom.sendWeeklyLeaderboard(user);
+  }
+
+  @Post("direct-message")
+  @UseGuards(AllowRoles(MemberRole.OrgAdmin))
+  directMessage(@CurrentUserDecorator() user: CurrentUser, @Body() body: WeComDirectMessageRequest) {
+    return this.wecom.sendDirectMessage(user, body);
   }
 }

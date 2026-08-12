@@ -28,8 +28,10 @@ interface StreamBotRegistration {
 @Injectable()
 export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WeComStreamBotService.name);
-  private readonly clients: WeComStreamBotClient[] = [];
   private readonly clientsByRole = new Map<WeComBotRole, WeComStreamBotClient>();
+  private readonly registrationsByRole = new Map<WeComBotRole, StreamBotRegistration>();
+  private readonly reconnectTimers = new Map<WeComBotRole, ReturnType<typeof setTimeout>>();
+  private readonly reconnectingRoles = new Set<WeComBotRole>();
 
   constructor(
     @Inject(WeComConfigService) private readonly config: WeComConfigService,
@@ -44,24 +46,21 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
     if (process.env.NODE_ENV === "test") return;
 
     for (const registration of this.getRegistrations()) {
-      const client = this.clientFactory({
-        botId: registration.botId,
-        secret: registration.secret,
-        wsUrl: config.intelligentBotWsUrl || undefined,
-        logger: this.createSdkLogger(registration.role)
-      });
-      this.bindClient(client, registration.role);
-      client.connect();
-      this.clients.push(client);
-      this.clientsByRole.set(registration.role, client);
+      this.registrationsByRole.set(registration.role, registration);
+      this.createAndConnectClient(registration, config.intelligentBotWsUrl);
     }
   }
 
   onModuleDestroy(): void {
-    for (const client of this.clients) {
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    for (const client of this.clientsByRole.values()) {
       client.disconnect();
     }
-    this.clients.length = 0;
+    this.reconnectTimers.clear();
+    this.reconnectingRoles.clear();
+    this.registrationsByRole.clear();
     this.clientsByRole.clear();
   }
 
@@ -70,11 +69,21 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
     if (!client) {
       throw new ApiException(ApiErrorCode.WeComWebhookNotConfigured, `企业微信智能机器人 ${role} 长连接尚未建立`);
     }
+    if (this.reconnectingRoles.has(role)) {
+      throw new ApiException(ApiErrorCode.WeComSendFailed, `企业微信智能机器人 ${role} 长连接正在自动重连，请稍后重试`);
+    }
 
-    await client.sendMessage(chatId, {
-      msgtype: "markdown",
-      markdown: { content: text }
-    });
+    try {
+      await client.sendMessage(chatId, {
+        msgtype: "markdown",
+        markdown: { content: text }
+      });
+    } catch (error) {
+      if (this.isSocketNotConnectedError(error)) {
+        this.scheduleAppReconnect(role, error);
+      }
+      throw error;
+    }
 
     return {
       mode: "intelligent_bot",
@@ -98,13 +107,73 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
     return registrations;
   }
 
+  private createAndConnectClient(registration: StreamBotRegistration, wsUrl: string): WeComStreamBotClient {
+    const client = this.clientFactory({
+      botId: registration.botId,
+      secret: registration.secret,
+      wsUrl: wsUrl || undefined,
+      logger: this.createSdkLogger(registration.role)
+    });
+    this.bindClient(client, registration.role);
+    this.clientsByRole.set(registration.role, client);
+    client.connect();
+    return client;
+  }
+
   private bindClient(client: WeComStreamBotClient, role: WeComBotRole): void {
-    client.on("authenticated", () => this.logger.log(`企业微信智能机器人长连接认证成功：${role}`) as never);
+    client.on("authenticated", () => {
+      this.reconnectingRoles.delete(role);
+      this.logger.log(`企业微信智能机器人长连接认证成功：${role}`);
+    });
     client.on("disconnected", (reason: unknown) => this.logger.warn(`企业微信智能机器人长连接断开：${role} ${String(reason)}`));
-    client.on("error", (error: unknown) => this.logger.error(`企业微信智能机器人长连接错误：${role}`, error instanceof Error ? error.stack : String(error)));
+    client.on("error", (error: unknown) => {
+      this.logger.error(`企业微信智能机器人长连接错误：${role}`, error instanceof Error ? error.stack : String(error));
+      if (this.isReconnectExhaustedError(error)) {
+        this.scheduleAppReconnect(role, error);
+      }
+    });
     client.on("message.text", (frame: unknown) => this.handleFrameSafely(client, frame as WsFrame<TextMessage>, role, "text"));
     client.on("message.image", (frame: unknown) => this.handleFrameSafely(client, frame as WsFrame<ImageMessage>, role, "image"));
     client.on("message.mixed", (frame: unknown) => this.handleFrameSafely(client, frame as WsFrame<MixedMessage>, role, "mixed"));
+  }
+
+  private scheduleAppReconnect(role: WeComBotRole, cause: unknown): void {
+    if (this.reconnectTimers.has(role)) return;
+    const registration = this.registrationsByRole.get(role);
+    if (!registration) return;
+
+    const delayMs = this.config.getConfig().streamAppReconnectDelayMs;
+    this.reconnectingRoles.add(role);
+    this.logger.warn(`企业微信智能机器人 ${role} SDK 重连耗尽或连接不可用，应用层将在 ${delayMs}ms 后重建长连接：${cause instanceof Error ? cause.message : String(cause)}`);
+
+    const timer = setTimeout(() => {
+      this.reconnectTimers.delete(role);
+      const oldClient = this.clientsByRole.get(role);
+      try {
+        oldClient?.disconnect();
+      } catch (error) {
+        this.logger.warn(`企业微信智能机器人 ${role} 旧长连接断开失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      try {
+        this.createAndConnectClient(registration, this.config.getConfig().intelligentBotWsUrl);
+        this.reconnectingRoles.delete(role);
+      } catch (error) {
+        this.logger.error(`企业微信智能机器人 ${role} 应用层重建长连接失败`, error instanceof Error ? error.stack : String(error));
+        this.scheduleAppReconnect(role, error);
+      }
+    }, delayMs);
+    this.reconnectTimers.set(role, timer);
+  }
+
+  private isReconnectExhaustedError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    return error.name === "WSReconnectExhaustedError" || error.message.includes("Max reconnect attempts");
+  }
+
+  private isSocketNotConnectedError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    return error.message.includes("WebSocket not connected") || error.message.includes("unable to send data");
   }
 
   private async handleFrameSafely(client: WeComStreamBotClient, frame: WsFrame<TextMessage | ImageMessage | MixedMessage>, role: WeComBotRole, messageType: "text" | "image" | "mixed"): Promise<void> {
