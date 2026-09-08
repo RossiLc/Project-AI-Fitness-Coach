@@ -272,10 +272,17 @@ export interface WeComBotEventRequest {
   botRole?: WeComBotRole;
   messageType?: "text" | "image" | "mixed";
   attachments?: WeComBotAttachment[];
+  quote?: WeComBotQuote;
   chatId?: string;
 }
 
 export type WeComBotRole = "checkin" | "coach";
+
+export interface WeComBotQuote {
+  messageType: "text" | "image" | "mixed" | "voice" | "file";
+  text?: string;
+  attachments?: WeComBotAttachment[];
+}
 
 export interface WeComBotAttachment {
   kind: "image";

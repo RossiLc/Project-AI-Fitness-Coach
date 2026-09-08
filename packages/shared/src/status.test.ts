@@ -39,10 +39,16 @@ describe("共享状态与错误码", () => {
       fromUserId: "wecom_user_001",
       text: "活动规则是什么",
       botId: "coach_bot_id",
-      botRole: "coach"
+      botRole: "coach",
+      quote: {
+        messageType: "text",
+        text: "我昨天快走 30 分钟",
+        attachments: []
+      }
     };
 
     expect(checkinEvent.botRole).toBe("checkin");
     expect(coachEvent.botRole).toBe("coach");
+    expect(coachEvent.quote?.text).toContain("快走");
   });
 });

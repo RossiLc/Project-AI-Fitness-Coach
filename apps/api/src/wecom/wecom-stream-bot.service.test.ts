@@ -91,6 +91,42 @@ describe("WeComStreamBotService", () => {
     expect(client.replyStream).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^openfit[_-]/), "打卡成功。", true);
   });
 
+  it("将 SDK 引用文本消息归一化为结构化 quote 上下文", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("WECOM_COACH_BOT_ID", "coach-bot");
+    vi.stubEnv("WECOM_COACH_BOT_SECRET", "coach-secret");
+    const fakeBot = new FakeWeComBotService();
+    const { client, handlers } = createClient();
+    const service = new WeComStreamBotService(new WeComConfigService(), fakeBot as never, () => client);
+    await service.onModuleInit();
+
+    await handlers.get("message.text")?.({
+      headers: { req_id: "req-quote-1" },
+      body: {
+        msgid: "msg-quote-1",
+        aibotid: "coach-bot",
+        chatid: "chat-1",
+        from: { userid: "wecom-user-1" },
+        text: { content: "@Open Fit AI教练 这个怎么安排？" },
+        quote: {
+          msgtype: "text",
+          text: { content: "我最近膝盖不舒服，但还想每天跑步减脂" }
+        }
+      }
+    });
+
+    expect(fakeBot.events[0]).toMatchObject({
+      messageId: "msg-quote-1",
+      text: "@Open Fit AI教练 这个怎么安排？",
+      botRole: "coach",
+      quote: {
+        messageType: "text",
+        text: "我最近膝盖不舒服，但还想每天跑步减脂",
+        attachments: []
+      }
+    });
+  });
+
   it("将 SDK 图片消息归一化为图片附件", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("WECOM_CHECKIN_BOT_ID", "checkin-bot");

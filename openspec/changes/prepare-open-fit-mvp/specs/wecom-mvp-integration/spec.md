@@ -96,7 +96,15 @@
 #### Scenario: 长连接消息归一化
 
 - **WHEN** SDK 收到 `message.text`、`message.image` 或 `message.mixed`
-- **THEN** 系统必须转换为统一的 `WeComBotEventRequest`，包含 `messageId`、`fromUserId`、`botId`、`botRole`、`messageType`、`text`、`attachments` 和 `chatId`
+- **THEN** 系统必须转换为统一的 `WeComBotEventRequest`，包含 `messageId`、`fromUserId`、`botId`、`botRole`、`messageType`、`text`、`attachments`、`quote` 和 `chatId`
+
+#### Scenario: AI 教练处理引用消息
+
+- **WHEN** 群成员引用其他消息并 @ Open Fit AI 教练提问
+- **THEN** 长连接适配层 SHALL 从 SDK 消息体 `body.quote` 提取引用文本、图文混排文本、语音转文本或图片附件元数据
+- **AND** 业务层 SHALL 将引用内容作为结构化 `quote` 上下文传给 AI 教练
+- **AND** AI 教练 SHALL 在模型输入中明确区分“用户引用的消息”和“用户当前问题”
+- **AND** AI 教练 SHALL 优先基于引用消息回答，短期历史会话不得覆盖引用内容
 
 #### Scenario: 长连接回复
 

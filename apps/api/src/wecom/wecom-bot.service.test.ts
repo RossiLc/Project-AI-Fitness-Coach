@@ -657,6 +657,38 @@ describe("WeComBotService", () => {
     expect(result.text).not.toContain("sk-test");
     expect(coachAdviceMessages[0].at(-1)).toEqual({ role: "user", content: "玉米多少大卡热量" });
   });
+
+  it("AI 教练收到引用消息时把引用内容作为当前问题上下文且优先于历史会话", async () => {
+    const { service, coachAdviceMessages } = createService();
+
+    await service.handleEvent({
+      messageId: "msg_history_context",
+      fromUserId: "wecom_user_001",
+      chatId: "group_1",
+      text: "我最近在增肌，帮我记一下",
+      botRole: "coach"
+    } as never);
+    await service.handleEvent({
+      messageId: "msg_quote_context",
+      fromUserId: "wecom_user_001",
+      chatId: "group_1",
+      text: "@Open Fit AI教练 这个怎么安排？",
+      botRole: "coach",
+      quote: {
+        messageType: "text",
+        text: "B说：我最近膝盖不舒服，但还想每天跑步减脂",
+        attachments: []
+      }
+    } as never);
+
+    const secondCallMessages = coachAdviceMessages[1];
+    expect(secondCallMessages.at(-1)?.content).toContain("用户引用的消息");
+    expect(secondCallMessages.at(-1)?.content).toContain("膝盖不舒服");
+    expect(secondCallMessages.at(-1)?.content).toContain("用户当前问题");
+    expect(secondCallMessages.at(-1)?.content).toContain("这个怎么安排");
+    expect(secondCallMessages.some((message) => message.content.includes("此前与 AI 教练的会话摘要"))).toBe(false);
+  });
+
   it("AI coach injects stable structured profile memory into later model calls", async () => {
     const { service, coachAdviceMessages, coachProfileMemories } = createService();
 

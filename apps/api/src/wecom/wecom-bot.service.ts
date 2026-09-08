@@ -342,6 +342,7 @@ export class WeComBotService {
 
   private async handleCoachAdvice(user: CurrentUser, body: WeComBotEventRequest): Promise<WeComBotEventResponse> {
     const text = body.text;
+    const modelUserText = this.buildCoachUserPrompt(body);
     const wecomUserid = user.wecomUserid ?? body.fromUserId;
     if (this.isClearCoachContextCommand(text)) {
       await this.conversations?.clearConversation({ orgId: user.orgId, wecomUserid, chatId: body.chatId });
@@ -363,10 +364,18 @@ export class WeComBotService {
     if (profilePrompt) {
       messages.push({ role: "system", content: profilePrompt });
     }
-    if (context?.summary) {
+    if (!body.quote && context?.summary) {
       messages.push({ role: "system", content: `以下是当前用户此前与 AI 教练的会话摘要，只用于理解追问上下文：\n${context.summary}` });
     }
-    messages.push(...(context?.messages ?? []), { role: "user", content: text });
+    if (body.quote) {
+      messages.push({
+        role: "system",
+        content: "本轮消息包含用户在企业微信群中引用的消息。回答必须优先围绕引用消息和用户当前问题；历史会话只作为很弱的补充背景，不得覆盖引用消息。"
+      });
+    } else {
+      messages.push(...(context?.messages ?? []));
+    }
+    messages.push({ role: "user", content: modelUserText });
     const modelReply = await this.aiProvider.generateCoachAdviceWithMessages(messages);
     const outputSafety = this.coachSafety.validateOutput(modelReply.answer);
     const safeText = outputSafety.riskLevel === "escalate" ? outputSafety.text : modelReply.answer;
@@ -376,14 +385,14 @@ export class WeComBotService {
         memberId: user.id,
         wecomUserid,
         chatId: body.chatId,
-        userText: text,
+        userText: modelUserText,
         assistantText: safeText
       });
       await this.profiles?.updateFromExchange({
         orgId: user.orgId,
         memberId: user.id,
         wecomUserid,
-        userText: text,
+        userText: modelUserText,
         assistantText: safeText
       });
     }
@@ -392,6 +401,26 @@ export class WeComBotService {
       intent: BotIntent.CoachAdvice,
       text: safeText
     };
+  }
+
+  private buildCoachUserPrompt(body: WeComBotEventRequest): string {
+    if (!body.quote) return body.text;
+
+    const quoteParts = [
+      `类型：${body.quote.messageType}`,
+      body.quote.text ? `内容：${body.quote.text}` : "",
+      body.quote.attachments?.length ? `附件：${body.quote.attachments.length} 个` : ""
+    ].filter(Boolean);
+
+    return [
+      "用户引用的消息：",
+      quoteParts.join("\n") || "引用消息没有可读取的文本内容。",
+      "",
+      "用户当前问题：",
+      body.text,
+      "",
+      "请优先基于“用户引用的消息”回答当前问题；只有引用内容不足时，才参考历史会话。"
+    ].join("\n");
   }
 
   private text(intent: BotIntent, text: string): WeComBotEventResponse {

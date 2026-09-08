@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import { WSClient, generateReqId, type ImageMessage, type MixedMessage, type TextMessage, type WSClientOptions, type WsFrame } from "@wecom/aibot-node-sdk";
-import type { WeComBotAttachment, WeComBotEventRequest, WeComBotRole, WeComSendResult } from "@openfit/shared";
+import type { WeComBotAttachment, WeComBotEventRequest, WeComBotQuote, WeComBotRole, WeComSendResult } from "@openfit/shared";
 import { ApiErrorCode } from "@openfit/shared";
 import { ApiException } from "../common/api-response.js";
 import { WeComBotService } from "./wecom-bot.service.js";
@@ -200,6 +200,7 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
       botRole: role,
       messageType,
       attachments: await this.extractAttachments(client, frame, messageType),
+      quote: await this.extractQuote(client, frame),
       chatId: body?.chatid
     };
   }
@@ -227,6 +228,40 @@ export class WeComStreamBotService implements OnModuleInit, OnModuleDestroy {
       return Promise.all(images.map((image) => this.toImageAttachment(client, image)));
     }
     return [];
+  }
+
+  private async extractQuote(client: WeComStreamBotClient, frame: WsFrame<TextMessage | ImageMessage | MixedMessage>): Promise<WeComBotQuote | undefined> {
+    const quote = frame.body?.quote;
+    if (!quote) return undefined;
+
+    if (quote.msgtype === "text") {
+      return { messageType: "text", text: quote.text?.content?.trim() || undefined, attachments: [] };
+    }
+
+    if (quote.msgtype === "mixed") {
+      const items = quote.mixed?.msg_item ?? [];
+      const text = items
+        .filter((item) => item.msgtype === "text")
+        .map((item) => item.text?.content ?? "")
+        .join("\n")
+        .trim();
+      const images = items.filter((item) => item.msgtype === "image" && item.image).map((item) => item.image!);
+      return {
+        messageType: "mixed",
+        text: text || undefined,
+        attachments: await Promise.all(images.map((image) => this.toImageAttachment(client, image)))
+      };
+    }
+
+    if (quote.msgtype === "voice") {
+      return { messageType: "voice", text: quote.voice?.content?.trim() || undefined, attachments: [] };
+    }
+
+    if (quote.msgtype === "image" && quote.image) {
+      return { messageType: "image", attachments: [await this.toImageAttachment(client, quote.image)] };
+    }
+
+    return { messageType: quote.msgtype, attachments: [] };
   }
 
   private async toImageAttachment(client: WeComStreamBotClient, image: { url: string; aeskey?: string; filename?: string }): Promise<WeComBotAttachment> {
